@@ -2,17 +2,21 @@
 
 EXTENDS Sequences, TLC, Integers
 
-CONSTANT ECUs, FaultTypes, FaultBehaviors, MonitoringTypes, S
+CONSTANT ECUs, FaultTypes, FaultBehaviors, S
 
 
 (*--fair algorithm ecuswitch
 variables
-  fault_ecu = "supervisor",
-  faults = [fault_ecu_name : {fault_ecu}, fault_type : FaultTypes, fault_behavior : FaultBehaviors, fault_monitoring : {"self_monitoring"}],
-  self_faults \in faults \X faults,
+  fault_ecu = "main",
+  faults = [fault_ecu_name : {fault_ecu}, fault_type : FaultTypes, fault_behavior : FaultBehaviors],
+  self_faults \in faults \X faults \X faults,
   \*self_faults = << [fault_ecu_name |-> fault_ecu, fault_type |-> "non_self_recoverable", fault_behavior |-> "emergency_stop"], [fault_ecu_name |-> fault_ecu, fault_type |-> "non_self_recoverable", fault_behavior |-> "emergency_stop"]>>,
   self_fault_queue = [ecu \in ECUs |-> IF ecu = fault_ecu THEN self_faults ELSE <<>>],
+  \*self_fault_queue = [ecu \in ECUs |-> <<>>],
+  \*efaults = [fault_ecu_name : {fault_ecu}],
+  \*external_faults \in efaults \X efaults,
   voter_queue = <<>>,
+  voter_status = "none",
   StopOperators = [ecu : ECUs, behavior : FaultBehaviors],
   emergency_stop_operator_queue = [ecu \in ECUs |-> <<>>],
   EmergencyStopOperators = {"main_emergency_stop_operator", "sub_emergency_stop_operator", "supervisor_emergency_stop_operator"},
@@ -22,7 +26,6 @@ variables
   emergency_handler_status = [ecu \in {"main", "sub"} |-> "none"],
   emergency_handler_queue = [ecu \in {"main", "sub"} |-> <<>>],
   SelfMonitorings = {"main_self_monitoring", "sub_self_monitoring", "supervisor_self_monitoring"},
-  voter_status = "none",
   vehicle_queue = <<>>,
   vehicle_status = "running",
   switch = [state |-> "main"];
@@ -139,8 +142,6 @@ begin
     end while;
 end process;
 
-
-
 process self_monitoring \in SelfMonitorings
 variables
   fault,
@@ -163,7 +164,6 @@ begin
         voter_queue := Append(voter_queue, fault);
     end while;
 end process;
-
 
 \* decide which ECU to operate MRM
 process voter = "voter"
@@ -241,20 +241,20 @@ begin
 end process;
 
 end algorithm; *)
-\* BEGIN TRANSLATION (chksum(pcal) = "d2835282" /\ chksum(tla) = "95e22deb")
-\* Label OPERATE_STOP of process emergency_stop_operator at line 59 col 5 changed to OPERATE_STOP_
-\* Process variable fault of process emergency_stop_operator at line 49 col 3 changed to fault_
-\* Process variable operator_status of process emergency_stop_operator at line 50 col 3 changed to operator_status_
-\* Process variable fault of process comfortable_stop_operator at line 89 col 3 changed to fault_c
-\* Process variable fault of process self_monitoring at line 146 col 3 changed to fault_s
+\* BEGIN TRANSLATION (chksum(pcal) = "78f1ad3b" /\ chksum(tla) = "d1ad8462")
+\* Label OPERATE_STOP of process emergency_stop_operator at line 62 col 5 changed to OPERATE_STOP_
+\* Process variable fault of process emergency_stop_operator at line 52 col 3 changed to fault_
+\* Process variable operator_status of process emergency_stop_operator at line 53 col 3 changed to operator_status_
+\* Process variable fault of process comfortable_stop_operator at line 92 col 3 changed to fault_c
+\* Process variable fault of process self_monitoring at line 147 col 3 changed to fault_s
 CONSTANT defaultInitValue
 VARIABLES fault_ecu, faults, self_faults, self_fault_queue, voter_queue,
-          StopOperators, emergency_stop_operator_queue,
+          voter_status, StopOperators, emergency_stop_operator_queue,
           EmergencyStopOperators, comfortable_stop_operator_queue,
           ComfortableStopOperators, EmergencyHandlers,
           emergency_handler_status, emergency_handler_queue, SelfMonitorings,
-          voter_status, vehicle_queue, vehicle_status, switch,
-          is_stop_operator_succeeded, pc
+          vehicle_queue, vehicle_status, switch, is_stop_operator_succeeded,
+          pc
 
 (* define statement *)
 VehicleStopped == <>(vehicle_status = "stopped")
@@ -266,26 +266,26 @@ VARIABLES fault_, operator_status_, emergency_stop_operator_ecu, fault_c,
           comfortable_stop_operator_operation, operation
 
 vars == << fault_ecu, faults, self_faults, self_fault_queue, voter_queue,
-           StopOperators, emergency_stop_operator_queue,
+           voter_status, StopOperators, emergency_stop_operator_queue,
            EmergencyStopOperators, comfortable_stop_operator_queue,
            ComfortableStopOperators, EmergencyHandlers,
            emergency_handler_status, emergency_handler_queue, SelfMonitorings,
-           voter_status, vehicle_queue, vehicle_status, switch,
-           is_stop_operator_succeeded, pc, fault_, operator_status_,
-           emergency_stop_operator_ecu, fault_c, operator_status,
-           comfortable_stop_operator_ecu, emergency_handler_ecu, fault_s,
-           self_monitoring_ecu, fault, switch_fault, is_switched,
-           comfortable_stop_after_switch, comfortable_stop_operator_operation,
-           operation >>
+           vehicle_queue, vehicle_status, switch, is_stop_operator_succeeded,
+           pc, fault_, operator_status_, emergency_stop_operator_ecu, fault_c,
+           operator_status, comfortable_stop_operator_ecu,
+           emergency_handler_ecu, fault_s, self_monitoring_ecu, fault,
+           switch_fault, is_switched, comfortable_stop_after_switch,
+           comfortable_stop_operator_operation, operation >>
 
 ProcSet == (EmergencyStopOperators) \cup (ComfortableStopOperators) \cup (EmergencyHandlers) \cup (SelfMonitorings) \cup {"voter"} \cup {"vehicle"}
 
 Init == (* Global variables *)
-        /\ fault_ecu = "supervisor"
+        /\ fault_ecu = "main"
         /\ faults = [fault_ecu_name : {fault_ecu}, fault_type : FaultTypes, fault_behavior : FaultBehaviors, fault_monitoring : {"self_monitoring"}]
-        /\ self_faults \in faults \X faults
+        /\ self_faults \in faults \X faults \X faults
         /\ self_fault_queue = [ecu \in ECUs |-> IF ecu = fault_ecu THEN self_faults ELSE <<>>]
         /\ voter_queue = <<>>
+        /\ voter_status = "none"
         /\ StopOperators = [ecu : ECUs, behavior : FaultBehaviors]
         /\ emergency_stop_operator_queue = [ecu \in ECUs |-> <<>>]
         /\ EmergencyStopOperators = {"main_emergency_stop_operator", "sub_emergency_stop_operator", "supervisor_emergency_stop_operator"}
@@ -295,7 +295,6 @@ Init == (* Global variables *)
         /\ emergency_handler_status = [ecu \in {"main", "sub"} |-> "none"]
         /\ emergency_handler_queue = [ecu \in {"main", "sub"} |-> <<>>]
         /\ SelfMonitorings = {"main_self_monitoring", "sub_self_monitoring", "supervisor_self_monitoring"}
-        /\ voter_status = "none"
         /\ vehicle_queue = <<>>
         /\ vehicle_status = "running"
         /\ switch = [state |-> "main"]
@@ -387,14 +386,13 @@ OPERATE_STOP_(self) == /\ pc[self] = "OPERATE_STOP_"
                                                   is_stop_operator_succeeded,
                                                   fault_, operator_status_ >>
                        /\ UNCHANGED << fault_ecu, faults, self_faults,
-                                       self_fault_queue, StopOperators,
-                                       EmergencyStopOperators,
+                                       self_fault_queue, voter_status,
+                                       StopOperators, EmergencyStopOperators,
                                        comfortable_stop_operator_queue,
                                        ComfortableStopOperators,
                                        EmergencyHandlers,
                                        emergency_handler_queue,
-                                       SelfMonitorings, voter_status,
-                                       vehicle_status, switch,
+                                       SelfMonitorings, vehicle_status, switch,
                                        emergency_stop_operator_ecu, fault_c,
                                        operator_status,
                                        comfortable_stop_operator_ecu,
@@ -436,14 +434,14 @@ OPERATE_STOP(self) == /\ pc[self] = "OPERATE_STOP"
                                                  fault_c, operator_status >>
                       /\ UNCHANGED << fault_ecu, faults, self_faults,
                                       self_fault_queue, voter_queue,
-                                      StopOperators,
+                                      voter_status, StopOperators,
                                       emergency_stop_operator_queue,
                                       EmergencyStopOperators,
                                       ComfortableStopOperators,
                                       EmergencyHandlers,
                                       emergency_handler_status,
-                                      SelfMonitorings, voter_status,
-                                      vehicle_queue, vehicle_status, switch,
+                                      SelfMonitorings, vehicle_queue,
+                                      vehicle_status, switch,
                                       is_stop_operator_succeeded, fault_,
                                       operator_status_,
                                       emergency_stop_operator_ecu,
@@ -476,16 +474,15 @@ EmergencyHandler(self) == /\ pc[self] = "EmergencyHandler"
                           /\ pc' = [pc EXCEPT ![self] = "EmergencyHandler"]
                           /\ UNCHANGED << fault_ecu, faults, self_faults,
                                           self_fault_queue, voter_queue,
-                                          StopOperators,
+                                          voter_status, StopOperators,
                                           emergency_stop_operator_queue,
                                           EmergencyStopOperators,
                                           comfortable_stop_operator_queue,
                                           ComfortableStopOperators,
                                           EmergencyHandlers,
                                           emergency_handler_status,
-                                          SelfMonitorings, voter_status,
-                                          vehicle_status, switch, fault_,
-                                          operator_status_,
+                                          SelfMonitorings, vehicle_status,
+                                          switch, fault_, operator_status_,
                                           emergency_stop_operator_ecu, fault_c,
                                           operator_status,
                                           comfortable_stop_operator_ecu,
@@ -519,13 +516,14 @@ SelfMonitoring(self) == /\ pc[self] = "SelfMonitoring"
                                                    comfortable_stop_operator_queue,
                                                    fault_s >>
                         /\ UNCHANGED << fault_ecu, faults, self_faults,
-                                        StopOperators, EmergencyStopOperators,
+                                        voter_status, StopOperators,
+                                        EmergencyStopOperators,
                                         ComfortableStopOperators,
                                         EmergencyHandlers,
                                         emergency_handler_status,
                                         emergency_handler_queue,
-                                        SelfMonitorings, voter_status,
-                                        vehicle_queue, vehicle_status, switch,
+                                        SelfMonitorings, vehicle_queue,
+                                        vehicle_status, switch,
                                         is_stop_operator_succeeded, fault_,
                                         operator_status_,
                                         emergency_stop_operator_ecu, fault_c,
@@ -593,9 +591,9 @@ Voter == /\ pc["voter"] = "Voter"
                                                                                       /\ UNCHANGED << switch_fault,
                                                                                                       comfortable_stop_after_switch >>
                                                                       ELSE /\ TRUE
-                                                                           /\ UNCHANGED << emergency_stop_operator_queue,
+                                                                           /\ UNCHANGED << voter_status,
+                                                                                           emergency_stop_operator_queue,
                                                                                            comfortable_stop_operator_queue,
-                                                                                           voter_status,
                                                                                            switch,
                                                                                            switch_fault,
                                                                                            is_switched,
@@ -619,18 +617,19 @@ Voter == /\ pc["voter"] = "Voter"
                                                                      comfortable_stop_after_switch >>
                                      ELSE /\ TRUE
                                           /\ UNCHANGED << voter_queue,
+                                                          voter_status,
                                                           emergency_stop_operator_queue,
                                                           comfortable_stop_operator_queue,
-                                                          voter_status, switch,
-                                                          fault, switch_fault,
+                                                          switch, fault,
+                                                          switch_fault,
                                                           is_switched,
                                                           comfortable_stop_after_switch >>
                                /\ UNCHANGED is_stop_operator_succeeded
                     /\ pc' = [pc EXCEPT !["voter"] = "Voter"]
                ELSE /\ pc' = [pc EXCEPT !["voter"] = "Done"]
-                    /\ UNCHANGED << voter_queue, emergency_stop_operator_queue,
-                                    comfortable_stop_operator_queue,
-                                    voter_status, switch,
+                    /\ UNCHANGED << voter_queue, voter_status,
+                                    emergency_stop_operator_queue,
+                                    comfortable_stop_operator_queue, switch,
                                     is_stop_operator_succeeded, fault,
                                     switch_fault, is_switched,
                                     comfortable_stop_after_switch >>
@@ -661,17 +660,16 @@ Vehicle == /\ pc["vehicle"] = "Vehicle"
                                             /\ UNCHANGED vehicle_status
            /\ pc' = [pc EXCEPT !["vehicle"] = "Vehicle"]
            /\ UNCHANGED << fault_ecu, faults, self_faults, self_fault_queue,
-                           voter_queue, StopOperators,
+                           voter_queue, voter_status, StopOperators,
                            emergency_stop_operator_queue,
                            EmergencyStopOperators,
                            comfortable_stop_operator_queue,
                            ComfortableStopOperators, EmergencyHandlers,
                            emergency_handler_status, emergency_handler_queue,
-                           SelfMonitorings, voter_status, switch,
-                           is_stop_operator_succeeded, fault_,
-                           operator_status_, emergency_stop_operator_ecu,
-                           fault_c, operator_status,
-                           comfortable_stop_operator_ecu,
+                           SelfMonitorings, switch, is_stop_operator_succeeded,
+                           fault_, operator_status_,
+                           emergency_stop_operator_ecu, fault_c,
+                           operator_status, comfortable_stop_operator_ecu,
                            emergency_handler_ecu, fault_s, self_monitoring_ecu,
                            fault, switch_fault, is_switched,
                            comfortable_stop_after_switch,
