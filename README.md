@@ -1,2 +1,2 @@
-# ふるまいをどうするか
-1. subECUで故障が起きて、switchにつながっているmainECUでMRMできる場合はcomfortable_stopにするのが正しい？
+# ecu_switch
+ECU切替（冗長系、監視系を利用したMRM機能）の検証コード (WIP)
