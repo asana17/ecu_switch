@@ -306,7 +306,7 @@ end macro;
 
 macro operate_mrm_on_voter(current_mrm_ecu)
 begin
-  \*--- normal ---
+  \*--- normal ------------------------------------------------------------------------------------------
   if voter_state.state = "normal" then
     if current_mrm_ecu /= "none" then
       if current_mrm_ecu = "supervisor" then
@@ -317,7 +317,7 @@ begin
       switch.state := initial_selected_ecu;
       current_mrm_ecu := "none";
     end if;
-  \*--- supervisor_stop---
+  \*--- supervisor_stop------------------------------------------------------------------------------------
   elsif voter_state.state = "supervisor_stop" then
     if current_mrm_ecu /= "supervisor" then
       if current_mrm_ecu /= "none" then
@@ -331,7 +331,7 @@ begin
         current_mrm_ecu := "supervisor";
       end if;
     end if;
-  \*--- comfortable_stop---
+  \*--- comfortable_stop-----------------------------------------------------------------------------------
   elsif voter_state.state = "comfortable_stop" then
     \* MRM operation will be change if mrm_ecu is initial_selected_ecu or not
     if current_mrm_ecu /= voter_state.mrm_ecu then
@@ -347,10 +347,10 @@ begin
               switch.state := initial_selected_ecu;
               current_mrm_ecu := initial_selected_ecu;
             end if;
-          else
+          else \* emergency_stop operator running, cannot operate comfortable_stop
             comfortable_stop_operator_request[extra_ecu] := "cancel";
             switch.state := initial_selected_ecu;
-            current_mrm_ecu := initial_selected_ecu;
+            current_mrm_ecu := "none";
           end if;
         else
           if emergency_stop_operator_status[initial_selected_ecu] /= "operating" then \* check whether emergency_stop is running on Main: if not running, operate comfortable stop
@@ -359,6 +359,9 @@ begin
               switch.state := initial_selected_ecu;
               current_mrm_ecu := initial_selected_ecu;
             end if;
+          else \* emergency_stop operator running, cannot operate comfortable_stop
+            switch.state := initial_selected_ecu;
+            current_mrm_ecu := "none";
           end if;
         end if;
       elsif voter_state.mrm_ecu = extra_ecu then
@@ -371,6 +374,9 @@ begin
             switch.state := extra_ecu;
             current_mrm_ecu := extra_ecu;
           end if;
+        else \* emergency_stop operator running, cannot operate comfortable_stop
+          switch.state := extra_ecu;
+          current_mrm_ecu := "none";
         end if;
       end if;
     end if;
@@ -843,39 +849,39 @@ begin
 end process;
 
 end algorithm; *)
-\* BEGIN TRANSLATION (chksum(pcal) = "dc25c7a8" /\ chksum(tla) = "99dbe43c")
-\* Label SelfMonitoring of process main_self_monitoring at line 426 col 5 changed to SelfMonitoring_
-\* Label SelfMonitoring of process sub_self_monitoring at line 436 col 5 changed to SelfMonitoring_s
-\* Label ExternalMonitoring of process main_external_monitoring at line 470 col 5 changed to ExternalMonitoring_
-\* Label ExternalMonitoring of process sub_external_monitoring at line 480 col 5 changed to ExternalMonitoring_s
-\* Label EmergencyHandling of process main_emergency_handler at line 522 col 5 changed to EmergencyHandling_
-\* Label EmergencyStopService of process main_emergency_stop_service at line 567 col 5 changed to EmergencyStopService_
-\* Label EmergencyStopService of process sub_emergency_stop_service at line 578 col 5 changed to EmergencyStopService_s
-\* Label ComfortableStopService of process main_comfortable_stop_service at line 613 col 5 changed to ComfortableStopService_
-\* Label OperateEmergencyStop of process main_emergency_stop_operator at line 656 col 5 changed to OperateEmergencyStop_
-\* Label OperateEmergencyStop of process sub_emergency_stop_operator at line 674 col 5 changed to OperateEmergencyStop_s
-\* Label OperatecomfortableStop of process main_comfortable_stop_operator at line 731 col 5 changed to OperatecomfortableStop_
-\* Process variable ecu of process main_self_monitoring at line 423 col 3 changed to ecu_
-\* Process variable ecu of process sub_self_monitoring at line 433 col 3 changed to ecu_s
-\* Process variable ecu of process supervisor_self_monitoring at line 443 col 3 changed to ecu_su
-\* Process variable ecu of process main_external_monitoring at line 467 col 3 changed to ecu_m
-\* Process variable ecu of process sub_external_monitoring at line 477 col 3 changed to ecu_sub
-\* Process variable ecu of process supervisor_external_monitoring at line 487 col 3 changed to ecu_sup
-\* Process variable is_emergency of process main_emergency_handler at line 515 col 3 changed to is_emergency_
-\* Process variable current_mrm_behavior of process main_emergency_handler at line 516 col 3 changed to current_mrm_behavior_
-\* Process variable mrm_state of process main_emergency_handler at line 517 col 3 changed to mrm_state_
-\* Process variable mrm_behavior of process main_emergency_handler at line 518 col 3 changed to mrm_behavior_
-\* Process variable ecu of process main_emergency_handler at line 519 col 3 changed to ecu_ma
-\* Process variable ecu of process sub_emergency_handler at line 536 col 3 changed to ecu_sub_
-\* Process variable ecu of process main_emergency_stop_service at line 564 col 1 changed to ecu_mai
-\* Process variable ecu of process sub_emergency_stop_service at line 575 col 1 changed to ecu_sub_e
-\* Process variable ecu of process supervisor_emergency_stop_service at line 586 col 1 changed to ecu_supe
-\* Process variable ecu of process main_comfortable_stop_service at line 610 col 1 changed to ecu_main
-\* Process variable ecu of process sub_comfortable_stop_service at line 621 col 1 changed to ecu_sub_c
-\* Process variable ecu of process main_emergency_stop_operator at line 653 col 3 changed to ecu_main_
-\* Process variable ecu of process sub_emergency_stop_operator at line 671 col 3 changed to ecu_sub_em
-\* Process variable ecu of process supervisor_emergency_stop_operator at line 689 col 3 changed to ecu_super
-\* Process variable ecu of process main_comfortable_stop_operator at line 728 col 3 changed to ecu_main_c
+\* BEGIN TRANSLATION (chksum(pcal) = "803e15a2" /\ chksum(tla) = "1834ec47")
+\* Label SelfMonitoring of process main_self_monitoring at line 432 col 5 changed to SelfMonitoring_
+\* Label SelfMonitoring of process sub_self_monitoring at line 442 col 5 changed to SelfMonitoring_s
+\* Label ExternalMonitoring of process main_external_monitoring at line 476 col 5 changed to ExternalMonitoring_
+\* Label ExternalMonitoring of process sub_external_monitoring at line 486 col 5 changed to ExternalMonitoring_s
+\* Label EmergencyHandling of process main_emergency_handler at line 528 col 5 changed to EmergencyHandling_
+\* Label EmergencyStopService of process main_emergency_stop_service at line 573 col 5 changed to EmergencyStopService_
+\* Label EmergencyStopService of process sub_emergency_stop_service at line 584 col 5 changed to EmergencyStopService_s
+\* Label ComfortableStopService of process main_comfortable_stop_service at line 619 col 5 changed to ComfortableStopService_
+\* Label OperateEmergencyStop of process main_emergency_stop_operator at line 662 col 5 changed to OperateEmergencyStop_
+\* Label OperateEmergencyStop of process sub_emergency_stop_operator at line 680 col 5 changed to OperateEmergencyStop_s
+\* Label OperatecomfortableStop of process main_comfortable_stop_operator at line 737 col 5 changed to OperatecomfortableStop_
+\* Process variable ecu of process main_self_monitoring at line 429 col 3 changed to ecu_
+\* Process variable ecu of process sub_self_monitoring at line 439 col 3 changed to ecu_s
+\* Process variable ecu of process supervisor_self_monitoring at line 449 col 3 changed to ecu_su
+\* Process variable ecu of process main_external_monitoring at line 473 col 3 changed to ecu_m
+\* Process variable ecu of process sub_external_monitoring at line 483 col 3 changed to ecu_sub
+\* Process variable ecu of process supervisor_external_monitoring at line 493 col 3 changed to ecu_sup
+\* Process variable is_emergency of process main_emergency_handler at line 521 col 3 changed to is_emergency_
+\* Process variable current_mrm_behavior of process main_emergency_handler at line 522 col 3 changed to current_mrm_behavior_
+\* Process variable mrm_state of process main_emergency_handler at line 523 col 3 changed to mrm_state_
+\* Process variable mrm_behavior of process main_emergency_handler at line 524 col 3 changed to mrm_behavior_
+\* Process variable ecu of process main_emergency_handler at line 525 col 3 changed to ecu_ma
+\* Process variable ecu of process sub_emergency_handler at line 542 col 3 changed to ecu_sub_
+\* Process variable ecu of process main_emergency_stop_service at line 570 col 1 changed to ecu_mai
+\* Process variable ecu of process sub_emergency_stop_service at line 581 col 1 changed to ecu_sub_e
+\* Process variable ecu of process supervisor_emergency_stop_service at line 592 col 1 changed to ecu_supe
+\* Process variable ecu of process main_comfortable_stop_service at line 616 col 1 changed to ecu_main
+\* Process variable ecu of process sub_comfortable_stop_service at line 627 col 1 changed to ecu_sub_c
+\* Process variable ecu of process main_emergency_stop_operator at line 659 col 3 changed to ecu_main_
+\* Process variable ecu of process sub_emergency_stop_operator at line 677 col 3 changed to ecu_sub_em
+\* Process variable ecu of process supervisor_emergency_stop_operator at line 695 col 3 changed to ecu_super
+\* Process variable ecu of process main_comfortable_stop_operator at line 734 col 3 changed to ecu_main_c
 CONSTANT defaultInitValue
 VARIABLES fault_ecu, s_faults, no_faults, e_faults, faults, 
           faults_and_no_faults, fault_queue, no_fault, self_faults, 
@@ -2584,7 +2590,7 @@ Voter == /\ pc["voter"] = "Voter"
                                                                                                                             current_mrm_ecu >>
                                                                                             ELSE /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![extra_ecu] = "cancel"]
                                                                                                  /\ switch' = [switch EXCEPT !.state = initial_selected_ecu]
-                                                                                                 /\ current_mrm_ecu' = initial_selected_ecu
+                                                                                                 /\ current_mrm_ecu' = "none"
                                                                                  ELSE /\ IF emergency_stop_operator_status[initial_selected_ecu] /= "operating"
                                                                                             THEN /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![initial_selected_ecu] = "operate"]
                                                                                                  /\ IF comfortable_stop_operator_status[initial_selected_ecu] = "operating"
@@ -2593,10 +2599,9 @@ Voter == /\ pc["voter"] = "Voter"
                                                                                                        ELSE /\ TRUE
                                                                                                             /\ UNCHANGED << switch, 
                                                                                                                             current_mrm_ecu >>
-                                                                                            ELSE /\ TRUE
-                                                                                                 /\ UNCHANGED << comfortable_stop_operator_request, 
-                                                                                                                 switch, 
-                                                                                                                 current_mrm_ecu >>
+                                                                                            ELSE /\ switch' = [switch EXCEPT !.state = initial_selected_ecu]
+                                                                                                 /\ current_mrm_ecu' = "none"
+                                                                                                 /\ UNCHANGED comfortable_stop_operator_request
                                                                       ELSE /\ IF voter_state'.mrm_ecu = extra_ecu
                                                                                  THEN /\ IF emergency_stop_operator_status["supervisor"] = "operating"
                                                                                             THEN /\ emergency_stop_operator_request' = [emergency_stop_operator_request EXCEPT !["supervisor"] = "cancel"]
@@ -2610,10 +2615,9 @@ Voter == /\ pc["voter"] = "Voter"
                                                                                                        ELSE /\ TRUE
                                                                                                             /\ UNCHANGED << switch, 
                                                                                                                             current_mrm_ecu >>
-                                                                                            ELSE /\ TRUE
-                                                                                                 /\ UNCHANGED << comfortable_stop_operator_request, 
-                                                                                                                 switch, 
-                                                                                                                 current_mrm_ecu >>
+                                                                                            ELSE /\ switch' = [switch EXCEPT !.state = extra_ecu]
+                                                                                                 /\ current_mrm_ecu' = "none"
+                                                                                                 /\ UNCHANGED comfortable_stop_operator_request
                                                                                  ELSE /\ TRUE
                                                                                       /\ UNCHANGED << emergency_stop_operator_request, 
                                                                                                       comfortable_stop_operator_request, 
