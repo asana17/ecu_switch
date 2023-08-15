@@ -2,17 +2,20 @@
 
 EXTENDS Sequences, TLC, Integers
 
-CONSTANT ECUs, FaultTypes, FaultBehaviors
+CONSTANT ECUs, FaultTypes, FaultBehaviors, MonitoringTypes
 
 
 (*--fair algorithm ecuswitch
 variables
   \*fault_ecu = "supervisor",
   fault_ecu \in ECUs,
-  faults = [fault_ecu_name : {fault_ecu}, self_recoverable : {TRUE, FALSE}, fault_behavior : FaultBehaviors, monitoring_type : {"self_monitoring"}],
-  no_fault = [fault_ecu_name |-> "none", fault_behavior |-> "none"],
+  s_faults = [fault_ecu_name : {fault_ecu}, self_recoverable : {TRUE, FALSE}, fault_behavior : FaultBehaviors, monitoring_type : {"self_monitoring"}],
+  no_faults = [fault_ecu_name : {"none"}, self_recoverable : {TRUE}, fault_behavior : {"none"}, monitoring_type : MonitoringTypes],
   e_faults = [fault_ecu_name : {fault_ecu}, self_recoverable : {FALSE}, fault_behavior : {"comfortable_stop"}, monitoring_type : {"external_monitoring"}],
-  fault_queue \in faults \X e_faults \X faults,
+  faults = s_faults \union e_faults,
+  faults_and_no_faults = faults \union no_faults,
+  fault_queue \in faults_and_no_faults \X faults_and_no_faults \X faults,
+  no_fault = [fault_ecu_name |-> "none", fault_behavior |-> "none"],
   \*self_faults = << [fault_ecu_name |-> fault_ecu, self_recoverable |-> FALSE,  fault_behavior |-> "emergency_stop"], [fault_ecu_name |-> fault_ecu, self_recoverable |-> FALSE, fault_behavior |-> "emergency_stop"]>>,
   self_faults = [main |-> no_fault, sub |-> no_fault, supervisor |-> no_fault],
   external_faults = [main |-> no_fault, sub |-> no_fault, supervisor |-> no_fault],
@@ -56,7 +59,7 @@ end define;
 
 macro monitor(fault_list, result_list, ecu)
 begin
-  if fault_list[ecu] = no_fault then
+  if fault_list[ecu].fault_ecu_name = "none" then
     result_list[ecu] := no_fault;
   else
     result_list[ecu] := fault_list[ecu];
@@ -306,20 +309,13 @@ begin
   \*--- normal ---
   if voter_state.state = "normal" then
     if current_mrm_ecu /= "none" then
-      switch.state := initial_selected_ecu;
       if current_mrm_ecu = "supervisor" then
-        if emergency_stop_operator_status[current_mrm_ecu] = "operating" then \* need to check whether Supervisor Stop is canceled
-          emergency_stop_operator_request[current_mrm_ecu] := "cancel";
-        else \* if MRM is not running
-          current_mrm_ecu := "none";
-        end if;
+        emergency_stop_operator_request[current_mrm_ecu] := "cancel";
       else \* if current_mrm_ecu is Main or Sub
-        if comfortable_stop_operator_status[current_mrm_ecu] = "operating" then \* need to check whether Comfortable Stop is canceled
-          comfortable_stop_operator_request[current_mrm_ecu] := "cancel";
-        else \* if MRM is not running
-          current_mrm_ecu := "none"; \* main and sub emergency_stop_operator is managed by emergency_handler, so voter does not need to cancel them
-        end if;
+        comfortable_stop_operator_request[current_mrm_ecu] := "cancel";
       end if;
+      switch.state := initial_selected_ecu;
+      current_mrm_ecu := "none";
     end if;
   \*--- supervisor_stop---
   elsif voter_state.state = "supervisor_stop" then
@@ -329,9 +325,8 @@ begin
           comfortable_stop_operator_request[current_mrm_ecu] := "cancel";
         end if;
       end if;
-      if emergency_stop_operator_status["supervisor"] /= "operating" then \* if Supervisor Stop not running,  send request
-        emergency_stop_operator_request["supervisor"] := "operate";
-      else \* if Supervisor Stop running, change switch and current_mrm_ecu
+      emergency_stop_operator_request["supervisor"] := "operate";
+      if emergency_stop_operator_status["supervisor"] = "operating" then \* if Supervisor Stop running, change switch and current_mrm_ecu
         switch.state := "supervisor";
         current_mrm_ecu := "supervisor";
       end if;
@@ -346,30 +341,36 @@ begin
         end if;
 
         if comfortable_stop_operator_status[extra_ecu] = "operating" then \* if sub comfortable_stop is operating, cancel it (no need to wait)
-          if emergency_stop_operator_status[initial_selected_ecu] /= "operating" /\ comfortable_stop_operator_status[initial_selected_ecu] /= "operating" then \* check whether emergency_stop is running on Main: if not running, operate comfortable stop
+          if emergency_stop_operator_status[initial_selected_ecu] /= "operating" then \* check whether emergency_stop is running on Main: if not running, operate comfortable stop
             comfortable_stop_operator_request := [main |-> "operate", sub |-> "cancel"];
+            if comfortable_stop_operator_status[initial_selected_ecu] = "operating" then
+              switch.state := initial_selected_ecu;
+              current_mrm_ecu := initial_selected_ecu;
+            end if;
           else
             comfortable_stop_operator_request[extra_ecu] := "cancel";
             switch.state := initial_selected_ecu;
             current_mrm_ecu := initial_selected_ecu;
           end if;
         else
-          if emergency_stop_operator_status[initial_selected_ecu] /= "operating" /\ comfortable_stop_operator_status[initial_selected_ecu] /= "operating" then \* check whether emergency_stop is running on Main: if not running, operate comfortable stop
+          if emergency_stop_operator_status[initial_selected_ecu] /= "operating" then \* check whether emergency_stop is running on Main: if not running, operate comfortable stop
             comfortable_stop_operator_request[initial_selected_ecu] := "operate";
-          else
-            switch.state := initial_selected_ecu;
-            current_mrm_ecu := initial_selected_ecu;
+            if comfortable_stop_operator_status[initial_selected_ecu] = "operating" then
+              switch.state := initial_selected_ecu;
+              current_mrm_ecu := initial_selected_ecu;
+            end if;
           end if;
         end if;
       elsif voter_state.mrm_ecu = extra_ecu then
         if emergency_stop_operator_status["supervisor"] = "operating" then \* Voter state transition from Main comfortable_stop to Sub comfortable_stop is rejected in update_voter_state: only need to cancel Supervisor Stop
           emergency_stop_operator_request["supervisor"] := "cancel";
         end if;
-        if emergency_stop_operator_status[extra_ecu] /= "operating" /\ comfortable_stop_operator_status[extra_ecu] /= "operating" then \* check whether emergency_stop is running on Sub: if not running, operate comfortable stop
+        if emergency_stop_operator_status[extra_ecu] /= "operating" then \* check whether emergency_stop is running on Sub: if not running, operate comfortable stop
           comfortable_stop_operator_request[extra_ecu] := "operate";
-        else
-          switch.state := extra_ecu;
-          current_mrm_ecu := extra_ecu;
+          if comfortable_stop_operator_status[extra_ecu] = "operating" then
+            switch.state := extra_ecu;
+            current_mrm_ecu := extra_ecu;
+          end if;
         end if;
       end if;
     end if;
@@ -388,10 +389,18 @@ begin
     while fault_queue /= <<>> do
       fault := Head(fault_queue);
       fault_queue := Tail(fault_queue);
-      if fault.monitoring_type = "self_monitoring" then
-        self_faults[fault.fault_ecu_name] := fault;
+      if fault.fault_ecu_name = "none" then
+        if fault.monitoring_type = "self_monitoring" then
+          self_faults := [main |-> no_fault, sub |-> no_fault, supervisor |-> no_fault];
+        else
+          external_faults := [main |-> no_fault, sub |-> no_fault, supervisor |-> no_fault];
+        end if;
       else
-        external_faults[fault.fault_ecu_name] := fault;
+        if fault.monitoring_type = "self_monitoring" then
+          self_faults[fault.fault_ecu_name] := fault;
+        elsif fault.monitoring_type = "external_monitoring" then
+          external_faults[fault.fault_ecu_name] := fault;
+        end if;
       end if;
     end while;
 end process;
@@ -834,41 +843,42 @@ begin
 end process;
 
 end algorithm; *)
-\* BEGIN TRANSLATION (chksum(pcal) = "aad9ff62" /\ chksum(tla) = "662b18fb")
-\* Label SelfMonitoring of process main_self_monitoring at line 417 col 5 changed to SelfMonitoring_
-\* Label SelfMonitoring of process sub_self_monitoring at line 427 col 5 changed to SelfMonitoring_s
-\* Label ExternalMonitoring of process main_external_monitoring at line 461 col 5 changed to ExternalMonitoring_
-\* Label ExternalMonitoring of process sub_external_monitoring at line 471 col 5 changed to ExternalMonitoring_s
-\* Label EmergencyHandling of process main_emergency_handler at line 513 col 5 changed to EmergencyHandling_
-\* Label EmergencyStopService of process main_emergency_stop_service at line 558 col 5 changed to EmergencyStopService_
-\* Label EmergencyStopService of process sub_emergency_stop_service at line 569 col 5 changed to EmergencyStopService_s
-\* Label ComfortableStopService of process main_comfortable_stop_service at line 604 col 5 changed to ComfortableStopService_
-\* Label OperateEmergencyStop of process main_emergency_stop_operator at line 647 col 5 changed to OperateEmergencyStop_
-\* Label OperateEmergencyStop of process sub_emergency_stop_operator at line 665 col 5 changed to OperateEmergencyStop_s
-\* Label OperatecomfortableStop of process main_comfortable_stop_operator at line 722 col 5 changed to OperatecomfortableStop_
-\* Process variable ecu of process main_self_monitoring at line 414 col 3 changed to ecu_
-\* Process variable ecu of process sub_self_monitoring at line 424 col 3 changed to ecu_s
-\* Process variable ecu of process supervisor_self_monitoring at line 434 col 3 changed to ecu_su
-\* Process variable ecu of process main_external_monitoring at line 458 col 3 changed to ecu_m
-\* Process variable ecu of process sub_external_monitoring at line 468 col 3 changed to ecu_sub
-\* Process variable ecu of process supervisor_external_monitoring at line 478 col 3 changed to ecu_sup
-\* Process variable is_emergency of process main_emergency_handler at line 506 col 3 changed to is_emergency_
-\* Process variable current_mrm_behavior of process main_emergency_handler at line 507 col 3 changed to current_mrm_behavior_
-\* Process variable mrm_state of process main_emergency_handler at line 508 col 3 changed to mrm_state_
-\* Process variable mrm_behavior of process main_emergency_handler at line 509 col 3 changed to mrm_behavior_
-\* Process variable ecu of process main_emergency_handler at line 510 col 3 changed to ecu_ma
-\* Process variable ecu of process sub_emergency_handler at line 527 col 3 changed to ecu_sub_
-\* Process variable ecu of process main_emergency_stop_service at line 555 col 1 changed to ecu_mai
-\* Process variable ecu of process sub_emergency_stop_service at line 566 col 1 changed to ecu_sub_e
-\* Process variable ecu of process supervisor_emergency_stop_service at line 577 col 1 changed to ecu_supe
-\* Process variable ecu of process main_comfortable_stop_service at line 601 col 1 changed to ecu_main
-\* Process variable ecu of process sub_comfortable_stop_service at line 612 col 1 changed to ecu_sub_c
-\* Process variable ecu of process main_emergency_stop_operator at line 644 col 3 changed to ecu_main_
-\* Process variable ecu of process sub_emergency_stop_operator at line 662 col 3 changed to ecu_sub_em
-\* Process variable ecu of process supervisor_emergency_stop_operator at line 680 col 3 changed to ecu_super
-\* Process variable ecu of process main_comfortable_stop_operator at line 719 col 3 changed to ecu_main_c
+\* BEGIN TRANSLATION (chksum(pcal) = "845ecd1" /\ chksum(tla) = "5231d4dc")
+\* Label SelfMonitoring of process main_self_monitoring at line 426 col 5 changed to SelfMonitoring_
+\* Label SelfMonitoring of process sub_self_monitoring at line 436 col 5 changed to SelfMonitoring_s
+\* Label ExternalMonitoring of process main_external_monitoring at line 470 col 5 changed to ExternalMonitoring_
+\* Label ExternalMonitoring of process sub_external_monitoring at line 480 col 5 changed to ExternalMonitoring_s
+\* Label EmergencyHandling of process main_emergency_handler at line 522 col 5 changed to EmergencyHandling_
+\* Label EmergencyStopService of process main_emergency_stop_service at line 567 col 5 changed to EmergencyStopService_
+\* Label EmergencyStopService of process sub_emergency_stop_service at line 578 col 5 changed to EmergencyStopService_s
+\* Label ComfortableStopService of process main_comfortable_stop_service at line 613 col 5 changed to ComfortableStopService_
+\* Label OperateEmergencyStop of process main_emergency_stop_operator at line 656 col 5 changed to OperateEmergencyStop_
+\* Label OperateEmergencyStop of process sub_emergency_stop_operator at line 674 col 5 changed to OperateEmergencyStop_s
+\* Label OperatecomfortableStop of process main_comfortable_stop_operator at line 731 col 5 changed to OperatecomfortableStop_
+\* Process variable ecu of process main_self_monitoring at line 423 col 3 changed to ecu_
+\* Process variable ecu of process sub_self_monitoring at line 433 col 3 changed to ecu_s
+\* Process variable ecu of process supervisor_self_monitoring at line 443 col 3 changed to ecu_su
+\* Process variable ecu of process main_external_monitoring at line 467 col 3 changed to ecu_m
+\* Process variable ecu of process sub_external_monitoring at line 477 col 3 changed to ecu_sub
+\* Process variable ecu of process supervisor_external_monitoring at line 487 col 3 changed to ecu_sup
+\* Process variable is_emergency of process main_emergency_handler at line 515 col 3 changed to is_emergency_
+\* Process variable current_mrm_behavior of process main_emergency_handler at line 516 col 3 changed to current_mrm_behavior_
+\* Process variable mrm_state of process main_emergency_handler at line 517 col 3 changed to mrm_state_
+\* Process variable mrm_behavior of process main_emergency_handler at line 518 col 3 changed to mrm_behavior_
+\* Process variable ecu of process main_emergency_handler at line 519 col 3 changed to ecu_ma
+\* Process variable ecu of process sub_emergency_handler at line 536 col 3 changed to ecu_sub_
+\* Process variable ecu of process main_emergency_stop_service at line 564 col 1 changed to ecu_mai
+\* Process variable ecu of process sub_emergency_stop_service at line 575 col 1 changed to ecu_sub_e
+\* Process variable ecu of process supervisor_emergency_stop_service at line 586 col 1 changed to ecu_supe
+\* Process variable ecu of process main_comfortable_stop_service at line 610 col 1 changed to ecu_main
+\* Process variable ecu of process sub_comfortable_stop_service at line 621 col 1 changed to ecu_sub_c
+\* Process variable ecu of process main_emergency_stop_operator at line 653 col 3 changed to ecu_main_
+\* Process variable ecu of process sub_emergency_stop_operator at line 671 col 3 changed to ecu_sub_em
+\* Process variable ecu of process supervisor_emergency_stop_operator at line 689 col 3 changed to ecu_super
+\* Process variable ecu of process main_comfortable_stop_operator at line 728 col 3 changed to ecu_main_c
 CONSTANT defaultInitValue
-VARIABLES fault_ecu, faults, no_fault, e_faults, fault_queue, self_faults, 
+VARIABLES fault_ecu, s_faults, no_faults, e_faults, faults, 
+          faults_and_no_faults, fault_queue, no_fault, self_faults, 
           external_faults, EmergencyHandlers, emergency_handler_status, 
           SelfMonitorings, ExternalMonitorings, self_monitoring_results, 
           external_monitoring_results, emergency_stop_operator_request, 
@@ -898,7 +908,8 @@ VARIABLES fault, ecu_, ecu_s, ecu_su, ecu_m, ecu_sub, ecu_sup, is_emergency_,
           sub_external_monitoring_int, supervisor_external_monitoring_int, 
           current_mrm_ecu
 
-vars == << fault_ecu, faults, no_fault, e_faults, fault_queue, self_faults, 
+vars == << fault_ecu, s_faults, no_faults, e_faults, faults, 
+           faults_and_no_faults, fault_queue, no_fault, self_faults, 
            external_faults, EmergencyHandlers, emergency_handler_status, 
            SelfMonitorings, ExternalMonitorings, self_monitoring_results, 
            external_monitoring_results, emergency_stop_operator_request, 
@@ -926,10 +937,13 @@ ProcSet == {"safety_mechanism"} \cup {"main_self_monitoring"} \cup {"sub_self_mo
 
 Init == (* Global variables *)
         /\ fault_ecu \in ECUs
-        /\ faults = [fault_ecu_name : {fault_ecu}, self_recoverable : {TRUE, FALSE}, fault_behavior : FaultBehaviors, monitoring_type : {"self_monitoring"}]
-        /\ no_fault = [fault_ecu_name |-> "none", fault_behavior |-> "none"]
+        /\ s_faults = [fault_ecu_name : {fault_ecu}, self_recoverable : {TRUE, FALSE}, fault_behavior : FaultBehaviors, monitoring_type : {"self_monitoring"}]
+        /\ no_faults = [fault_ecu_name : {"none"}, self_recoverable : {TRUE}, fault_behavior : {"none"}, monitoring_type : MonitoringTypes]
         /\ e_faults = [fault_ecu_name : {fault_ecu}, self_recoverable : {FALSE}, fault_behavior : {"comfortable_stop"}, monitoring_type : {"external_monitoring"}]
-        /\ fault_queue \in faults \X e_faults \X faults
+        /\ faults = (s_faults \union e_faults)
+        /\ faults_and_no_faults = (faults \union no_faults)
+        /\ fault_queue \in faults_and_no_faults \X faults_and_no_faults \X faults
+        /\ no_fault = [fault_ecu_name |-> "none", fault_behavior |-> "none"]
         /\ self_faults = [main |-> no_fault, sub |-> no_fault, supervisor |-> no_fault]
         /\ external_faults = [main |-> no_fault, sub |-> no_fault, supervisor |-> no_fault]
         /\ EmergencyHandlers = {"main_emergency_handler", "sub_emergency_handler"}
@@ -1044,16 +1058,26 @@ SafetyMechanism == /\ pc["safety_mechanism"] = "SafetyMechanism"
                    /\ IF fault_queue /= <<>>
                          THEN /\ fault' = Head(fault_queue)
                               /\ fault_queue' = Tail(fault_queue)
-                              /\ IF fault'.monitoring_type = "self_monitoring"
-                                    THEN /\ self_faults' = [self_faults EXCEPT ![fault'.fault_ecu_name] = fault']
-                                         /\ UNCHANGED external_faults
-                                    ELSE /\ external_faults' = [external_faults EXCEPT ![fault'.fault_ecu_name] = fault']
-                                         /\ UNCHANGED self_faults
+                              /\ IF fault'.fault_ecu_name = "none"
+                                    THEN /\ IF fault'.monitoring_type = "self_monitoring"
+                                               THEN /\ self_faults' = [main |-> no_fault, sub |-> no_fault, supervisor |-> no_fault]
+                                                    /\ UNCHANGED external_faults
+                                               ELSE /\ external_faults' = [main |-> no_fault, sub |-> no_fault, supervisor |-> no_fault]
+                                                    /\ UNCHANGED self_faults
+                                    ELSE /\ IF fault'.monitoring_type = "self_monitoring"
+                                               THEN /\ self_faults' = [self_faults EXCEPT ![fault'.fault_ecu_name] = fault']
+                                                    /\ UNCHANGED external_faults
+                                               ELSE /\ IF fault'.monitoring_type = "external_monitoring"
+                                                          THEN /\ external_faults' = [external_faults EXCEPT ![fault'.fault_ecu_name] = fault']
+                                                          ELSE /\ TRUE
+                                                               /\ UNCHANGED external_faults
+                                                    /\ UNCHANGED self_faults
                               /\ pc' = [pc EXCEPT !["safety_mechanism"] = "SafetyMechanism"]
                          ELSE /\ pc' = [pc EXCEPT !["safety_mechanism"] = "Done"]
                               /\ UNCHANGED << fault_queue, self_faults, 
                                               external_faults, fault >>
-                   /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
+                   /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, 
+                                   faults, faults_and_no_faults, no_fault, 
                                    EmergencyHandlers, emergency_handler_status, 
                                    SelfMonitorings, ExternalMonitorings, 
                                    self_monitoring_results, 
@@ -1097,12 +1121,13 @@ SafetyMechanism == /\ pc["safety_mechanism"] = "SafetyMechanism"
 safety_mechanism == SafetyMechanism
 
 SelfMonitoring_ == /\ pc["main_self_monitoring"] = "SelfMonitoring_"
-                   /\ IF self_faults[ecu_] = no_fault
+                   /\ IF self_faults[ecu_].fault_ecu_name = "none"
                          THEN /\ self_monitoring_results' = [self_monitoring_results EXCEPT ![ecu_] = no_fault]
                          ELSE /\ self_monitoring_results' = [self_monitoring_results EXCEPT ![ecu_] = self_faults[ecu_]]
                    /\ pc' = [pc EXCEPT !["main_self_monitoring"] = "SelfMonitoring_"]
-                   /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                   fault_queue, self_faults, external_faults, 
+                   /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, 
+                                   faults, faults_and_no_faults, fault_queue, 
+                                   no_fault, self_faults, external_faults, 
                                    EmergencyHandlers, emergency_handler_status, 
                                    SelfMonitorings, ExternalMonitorings, 
                                    external_monitoring_results, 
@@ -1145,12 +1170,13 @@ SelfMonitoring_ == /\ pc["main_self_monitoring"] = "SelfMonitoring_"
 main_self_monitoring == SelfMonitoring_
 
 SelfMonitoring_s == /\ pc["sub_self_monitoring"] = "SelfMonitoring_s"
-                    /\ IF self_faults[ecu_s] = no_fault
+                    /\ IF self_faults[ecu_s].fault_ecu_name = "none"
                           THEN /\ self_monitoring_results' = [self_monitoring_results EXCEPT ![ecu_s] = no_fault]
                           ELSE /\ self_monitoring_results' = [self_monitoring_results EXCEPT ![ecu_s] = self_faults[ecu_s]]
                     /\ pc' = [pc EXCEPT !["sub_self_monitoring"] = "SelfMonitoring_s"]
-                    /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                    fault_queue, self_faults, external_faults, 
+                    /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, 
+                                    faults, faults_and_no_faults, fault_queue, 
+                                    no_fault, self_faults, external_faults, 
                                     EmergencyHandlers, 
                                     emergency_handler_status, SelfMonitorings, 
                                     ExternalMonitorings, 
@@ -1194,12 +1220,13 @@ SelfMonitoring_s == /\ pc["sub_self_monitoring"] = "SelfMonitoring_s"
 sub_self_monitoring == SelfMonitoring_s
 
 SelfMonitoring == /\ pc["supervisor_self_monitoring"] = "SelfMonitoring"
-                  /\ IF self_faults[ecu_su] = no_fault
+                  /\ IF self_faults[ecu_su].fault_ecu_name = "none"
                         THEN /\ self_monitoring_results' = [self_monitoring_results EXCEPT ![ecu_su] = no_fault]
                         ELSE /\ self_monitoring_results' = [self_monitoring_results EXCEPT ![ecu_su] = self_faults[ecu_su]]
                   /\ pc' = [pc EXCEPT !["supervisor_self_monitoring"] = "SelfMonitoring"]
-                  /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                  fault_queue, self_faults, external_faults, 
+                  /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, 
+                                  faults, faults_and_no_faults, fault_queue, 
+                                  no_fault, self_faults, external_faults, 
                                   EmergencyHandlers, emergency_handler_status, 
                                   SelfMonitorings, ExternalMonitorings, 
                                   external_monitoring_results, 
@@ -1242,12 +1269,13 @@ SelfMonitoring == /\ pc["supervisor_self_monitoring"] = "SelfMonitoring"
 supervisor_self_monitoring == SelfMonitoring
 
 ExternalMonitoring_ == /\ pc["main_external_monitoring"] = "ExternalMonitoring_"
-                       /\ IF external_faults[ecu_m] = no_fault
+                       /\ IF external_faults[ecu_m].fault_ecu_name = "none"
                              THEN /\ external_monitoring_results' = [external_monitoring_results EXCEPT ![ecu_m] = no_fault]
                              ELSE /\ external_monitoring_results' = [external_monitoring_results EXCEPT ![ecu_m] = external_faults[ecu_m]]
                        /\ pc' = [pc EXCEPT !["main_external_monitoring"] = "ExternalMonitoring_"]
-                       /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                       fault_queue, self_faults, 
+                       /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                       e_faults, faults, faults_and_no_faults, 
+                                       fault_queue, no_fault, self_faults, 
                                        external_faults, EmergencyHandlers, 
                                        emergency_handler_status, 
                                        SelfMonitorings, ExternalMonitorings, 
@@ -1294,12 +1322,13 @@ ExternalMonitoring_ == /\ pc["main_external_monitoring"] = "ExternalMonitoring_"
 main_external_monitoring == ExternalMonitoring_
 
 ExternalMonitoring_s == /\ pc["sub_external_monitoring"] = "ExternalMonitoring_s"
-                        /\ IF external_faults[ecu_sub] = no_fault
+                        /\ IF external_faults[ecu_sub].fault_ecu_name = "none"
                               THEN /\ external_monitoring_results' = [external_monitoring_results EXCEPT ![ecu_sub] = no_fault]
                               ELSE /\ external_monitoring_results' = [external_monitoring_results EXCEPT ![ecu_sub] = external_faults[ecu_sub]]
                         /\ pc' = [pc EXCEPT !["sub_external_monitoring"] = "ExternalMonitoring_s"]
-                        /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                        fault_queue, self_faults, 
+                        /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                        e_faults, faults, faults_and_no_faults, 
+                                        fault_queue, no_fault, self_faults, 
                                         external_faults, EmergencyHandlers, 
                                         emergency_handler_status, 
                                         SelfMonitorings, ExternalMonitorings, 
@@ -1346,12 +1375,13 @@ ExternalMonitoring_s == /\ pc["sub_external_monitoring"] = "ExternalMonitoring_s
 sub_external_monitoring == ExternalMonitoring_s
 
 ExternalMonitoring == /\ pc["supervisor_external_monitoring"] = "ExternalMonitoring"
-                      /\ IF external_faults[ecu_sup] = no_fault
+                      /\ IF external_faults[ecu_sup].fault_ecu_name = "none"
                             THEN /\ external_monitoring_results' = [external_monitoring_results EXCEPT ![ecu_sup] = no_fault]
                             ELSE /\ external_monitoring_results' = [external_monitoring_results EXCEPT ![ecu_sup] = external_faults[ecu_sup]]
                       /\ pc' = [pc EXCEPT !["supervisor_external_monitoring"] = "ExternalMonitoring"]
-                      /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                      fault_queue, self_faults, 
+                      /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, 
+                                      faults, faults_and_no_faults, 
+                                      fault_queue, no_fault, self_faults, 
                                       external_faults, EmergencyHandlers, 
                                       emergency_handler_status, 
                                       SelfMonitorings, ExternalMonitorings, 
@@ -1474,8 +1504,9 @@ EmergencyHandling_ == /\ pc["main_emergency_handler"] = "EmergencyHandling_"
                                                  is_emergency_, 
                                                  current_mrm_behavior_, 
                                                  mrm_state_, mrm_behavior_ >>
-                      /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                      fault_queue, self_faults, 
+                      /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, 
+                                      faults, faults_and_no_faults, 
+                                      fault_queue, no_fault, self_faults, 
                                       external_faults, EmergencyHandlers, 
                                       emergency_handler_status, 
                                       SelfMonitorings, ExternalMonitorings, 
@@ -1595,8 +1626,9 @@ EmergencyHandling == /\ pc["sub_emergency_handler"] = "EmergencyHandling"
                                                 is_emergency, 
                                                 current_mrm_behavior, 
                                                 mrm_state, mrm_behavior >>
-                     /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                     fault_queue, self_faults, external_faults, 
+                     /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, 
+                                     faults, faults_and_no_faults, fault_queue, 
+                                     no_fault, self_faults, external_faults, 
                                      EmergencyHandlers, 
                                      emergency_handler_status, SelfMonitorings, 
                                      ExternalMonitorings, 
@@ -1664,8 +1696,10 @@ EmergencyStopService_ == /\ pc["main_emergency_stop_service"] = "EmergencyStopSe
                                     /\ UNCHANGED << emergency_stop_operator_request, 
                                                     emergency_stop_operator_status >>
                          /\ pc' = [pc EXCEPT !["main_emergency_stop_service"] = "EmergencyStopService_"]
-                         /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                         fault_queue, self_faults, 
+                         /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                         e_faults, faults, 
+                                         faults_and_no_faults, fault_queue, 
+                                         no_fault, self_faults, 
                                          external_faults, EmergencyHandlers, 
                                          emergency_handler_status, 
                                          SelfMonitorings, ExternalMonitorings, 
@@ -1734,8 +1768,10 @@ EmergencyStopService_s == /\ pc["sub_emergency_stop_service"] = "EmergencyStopSe
                                      /\ UNCHANGED << emergency_stop_operator_request, 
                                                      emergency_stop_operator_status >>
                           /\ pc' = [pc EXCEPT !["sub_emergency_stop_service"] = "EmergencyStopService_s"]
-                          /\ UNCHANGED << fault_ecu, faults, no_fault, 
-                                          e_faults, fault_queue, self_faults, 
+                          /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                          e_faults, faults, 
+                                          faults_and_no_faults, fault_queue, 
+                                          no_fault, self_faults, 
                                           external_faults, EmergencyHandlers, 
                                           emergency_handler_status, 
                                           SelfMonitorings, ExternalMonitorings, 
@@ -1804,8 +1840,9 @@ EmergencyStopService == /\ pc["supervisor_emergency_stop_service"] = "EmergencyS
                                    /\ UNCHANGED << emergency_stop_operator_request, 
                                                    emergency_stop_operator_status >>
                         /\ pc' = [pc EXCEPT !["supervisor_emergency_stop_service"] = "EmergencyStopService"]
-                        /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                        fault_queue, self_faults, 
+                        /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                        e_faults, faults, faults_and_no_faults, 
+                                        fault_queue, no_fault, self_faults, 
                                         external_faults, EmergencyHandlers, 
                                         emergency_handler_status, 
                                         SelfMonitorings, ExternalMonitorings, 
@@ -1874,8 +1911,10 @@ ComfortableStopService_ == /\ pc["main_comfortable_stop_service"] = "Comfortable
                                       /\ UNCHANGED << emergency_stop_operator_request, 
                                                       emergency_stop_operator_status >>
                            /\ pc' = [pc EXCEPT !["main_comfortable_stop_service"] = "ComfortableStopService_"]
-                           /\ UNCHANGED << fault_ecu, faults, no_fault, 
-                                           e_faults, fault_queue, self_faults, 
+                           /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                           e_faults, faults, 
+                                           faults_and_no_faults, fault_queue, 
+                                           no_fault, self_faults, 
                                            external_faults, EmergencyHandlers, 
                                            emergency_handler_status, 
                                            SelfMonitorings, 
@@ -1945,8 +1984,10 @@ ComfortableStopService == /\ pc["sub_comfortable_stop_service"] = "ComfortableSt
                                      /\ UNCHANGED << emergency_stop_operator_request, 
                                                      emergency_stop_operator_status >>
                           /\ pc' = [pc EXCEPT !["sub_comfortable_stop_service"] = "ComfortableStopService"]
-                          /\ UNCHANGED << fault_ecu, faults, no_fault, 
-                                          e_faults, fault_queue, self_faults, 
+                          /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                          e_faults, faults, 
+                                          faults_and_no_faults, fault_queue, 
+                                          no_fault, self_faults, 
                                           external_faults, EmergencyHandlers, 
                                           emergency_handler_status, 
                                           SelfMonitorings, ExternalMonitorings, 
@@ -2000,8 +2041,10 @@ OperateEmergencyStop_ == /\ pc["main_emergency_stop_operator"] = "OperateEmergen
                                ELSE /\ TRUE
                                     /\ UNCHANGED vehicle_status
                          /\ pc' = [pc EXCEPT !["main_emergency_stop_operator"] = "OperateEmergencyStop_"]
-                         /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                         fault_queue, self_faults, 
+                         /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                         e_faults, faults, 
+                                         faults_and_no_faults, fault_queue, 
+                                         no_fault, self_faults, 
                                          external_faults, EmergencyHandlers, 
                                          emergency_handler_status, 
                                          SelfMonitorings, ExternalMonitorings, 
@@ -2058,8 +2101,10 @@ OperateEmergencyStop_s == /\ pc["sub_emergency_stop_operator"] = "OperateEmergen
                                 ELSE /\ TRUE
                                      /\ UNCHANGED vehicle_status
                           /\ pc' = [pc EXCEPT !["sub_emergency_stop_operator"] = "OperateEmergencyStop_s"]
-                          /\ UNCHANGED << fault_ecu, faults, no_fault, 
-                                          e_faults, fault_queue, self_faults, 
+                          /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                          e_faults, faults, 
+                                          faults_and_no_faults, fault_queue, 
+                                          no_fault, self_faults, 
                                           external_faults, EmergencyHandlers, 
                                           emergency_handler_status, 
                                           SelfMonitorings, ExternalMonitorings, 
@@ -2116,8 +2161,9 @@ OperateEmergencyStop == /\ pc["supervisor_emergency_stop_operator"] = "OperateEm
                               ELSE /\ TRUE
                                    /\ UNCHANGED vehicle_status
                         /\ pc' = [pc EXCEPT !["supervisor_emergency_stop_operator"] = "OperateEmergencyStop"]
-                        /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, 
-                                        fault_queue, self_faults, 
+                        /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                        e_faults, faults, faults_and_no_faults, 
+                                        fault_queue, no_fault, self_faults, 
                                         external_faults, EmergencyHandlers, 
                                         emergency_handler_status, 
                                         SelfMonitorings, ExternalMonitorings, 
@@ -2184,8 +2230,10 @@ OperatecomfortableStop_ == /\ pc["main_comfortable_stop_operator"] = "Operatecom
                                       /\ UNCHANGED << vehicle_status, 
                                                       no_operation_during_emergency >>
                            /\ pc' = [pc EXCEPT !["main_comfortable_stop_operator"] = "OperatecomfortableStop_"]
-                           /\ UNCHANGED << fault_ecu, faults, no_fault, 
-                                           e_faults, fault_queue, self_faults, 
+                           /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                           e_faults, faults, 
+                                           faults_and_no_faults, fault_queue, 
+                                           no_fault, self_faults, 
                                            external_faults, EmergencyHandlers, 
                                            emergency_handler_status, 
                                            SelfMonitorings, 
@@ -2252,8 +2300,10 @@ OperatecomfortableStop == /\ pc["sub_comfortable_stop_operator"] = "Operatecomfo
                                      /\ UNCHANGED << vehicle_status, 
                                                      no_operation_during_emergency >>
                           /\ pc' = [pc EXCEPT !["sub_comfortable_stop_operator"] = "OperatecomfortableStop"]
-                          /\ UNCHANGED << fault_ecu, faults, no_fault, 
-                                          e_faults, fault_queue, self_faults, 
+                          /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
+                                          e_faults, faults, 
+                                          faults_and_no_faults, fault_queue, 
+                                          no_fault, self_faults, 
                                           external_faults, EmergencyHandlers, 
                                           emergency_handler_status, 
                                           SelfMonitorings, ExternalMonitorings, 
@@ -2483,20 +2533,13 @@ Voter == /\ pc["voter"] = "Voter"
                                                      /\ UNCHANGED voter_state
                     /\ IF voter_state'.state = "normal"
                           THEN /\ IF current_mrm_ecu /= "none"
-                                     THEN /\ switch' = [switch EXCEPT !.state = initial_selected_ecu]
-                                          /\ IF current_mrm_ecu = "supervisor"
-                                                THEN /\ IF emergency_stop_operator_status[current_mrm_ecu] = "operating"
-                                                           THEN /\ emergency_stop_operator_request' = [emergency_stop_operator_request EXCEPT ![current_mrm_ecu] = "cancel"]
-                                                                /\ UNCHANGED current_mrm_ecu
-                                                           ELSE /\ current_mrm_ecu' = "none"
-                                                                /\ UNCHANGED emergency_stop_operator_request
+                                     THEN /\ IF current_mrm_ecu = "supervisor"
+                                                THEN /\ emergency_stop_operator_request' = [emergency_stop_operator_request EXCEPT ![current_mrm_ecu] = "cancel"]
                                                      /\ UNCHANGED comfortable_stop_operator_request
-                                                ELSE /\ IF comfortable_stop_operator_status[current_mrm_ecu] = "operating"
-                                                           THEN /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![current_mrm_ecu] = "cancel"]
-                                                                /\ UNCHANGED current_mrm_ecu
-                                                           ELSE /\ current_mrm_ecu' = "none"
-                                                                /\ UNCHANGED comfortable_stop_operator_request
+                                                ELSE /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![current_mrm_ecu] = "cancel"]
                                                      /\ UNCHANGED emergency_stop_operator_request
+                                          /\ switch' = [switch EXCEPT !.state = initial_selected_ecu]
+                                          /\ current_mrm_ecu' = "none"
                                      ELSE /\ TRUE
                                           /\ UNCHANGED << emergency_stop_operator_request, 
                                                           comfortable_stop_operator_request, 
@@ -2511,13 +2554,13 @@ Voter == /\ pc["voter"] = "Voter"
                                                                            /\ UNCHANGED comfortable_stop_operator_request
                                                            ELSE /\ TRUE
                                                                 /\ UNCHANGED comfortable_stop_operator_request
-                                                     /\ IF emergency_stop_operator_status["supervisor"] /= "operating"
-                                                           THEN /\ emergency_stop_operator_request' = [emergency_stop_operator_request EXCEPT !["supervisor"] = "operate"]
+                                                     /\ emergency_stop_operator_request' = [emergency_stop_operator_request EXCEPT !["supervisor"] = "operate"]
+                                                     /\ IF emergency_stop_operator_status["supervisor"] = "operating"
+                                                           THEN /\ switch' = [switch EXCEPT !.state = "supervisor"]
+                                                                /\ current_mrm_ecu' = "supervisor"
+                                                           ELSE /\ TRUE
                                                                 /\ UNCHANGED << switch, 
                                                                                 current_mrm_ecu >>
-                                                           ELSE /\ switch' = [switch EXCEPT !.state = "supervisor"]
-                                                                /\ current_mrm_ecu' = "supervisor"
-                                                                /\ UNCHANGED emergency_stop_operator_request
                                                 ELSE /\ TRUE
                                                      /\ UNCHANGED << emergency_stop_operator_request, 
                                                                      comfortable_stop_operator_request, 
@@ -2531,32 +2574,46 @@ Voter == /\ pc["voter"] = "Voter"
                                                                                  ELSE /\ TRUE
                                                                                       /\ UNCHANGED emergency_stop_operator_request
                                                                            /\ IF comfortable_stop_operator_status[extra_ecu] = "operating"
-                                                                                 THEN /\ IF emergency_stop_operator_status[initial_selected_ecu] /= "operating" /\ comfortable_stop_operator_status[initial_selected_ecu] /= "operating"
+                                                                                 THEN /\ IF emergency_stop_operator_status[initial_selected_ecu] /= "operating"
                                                                                             THEN /\ comfortable_stop_operator_request' = [main |-> "operate", sub |-> "cancel"]
-                                                                                                 /\ UNCHANGED << switch, 
-                                                                                                                 current_mrm_ecu >>
+                                                                                                 /\ IF comfortable_stop_operator_status[initial_selected_ecu] = "operating"
+                                                                                                       THEN /\ switch' = [switch EXCEPT !.state = initial_selected_ecu]
+                                                                                                            /\ current_mrm_ecu' = initial_selected_ecu
+                                                                                                       ELSE /\ TRUE
+                                                                                                            /\ UNCHANGED << switch, 
+                                                                                                                            current_mrm_ecu >>
                                                                                             ELSE /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![extra_ecu] = "cancel"]
                                                                                                  /\ switch' = [switch EXCEPT !.state = initial_selected_ecu]
                                                                                                  /\ current_mrm_ecu' = initial_selected_ecu
-                                                                                 ELSE /\ IF emergency_stop_operator_status[initial_selected_ecu] /= "operating" /\ comfortable_stop_operator_status[initial_selected_ecu] /= "operating"
+                                                                                 ELSE /\ IF emergency_stop_operator_status[initial_selected_ecu] /= "operating"
                                                                                             THEN /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![initial_selected_ecu] = "operate"]
-                                                                                                 /\ UNCHANGED << switch, 
+                                                                                                 /\ IF comfortable_stop_operator_status[initial_selected_ecu] = "operating"
+                                                                                                       THEN /\ switch' = [switch EXCEPT !.state = initial_selected_ecu]
+                                                                                                            /\ current_mrm_ecu' = initial_selected_ecu
+                                                                                                       ELSE /\ TRUE
+                                                                                                            /\ UNCHANGED << switch, 
+                                                                                                                            current_mrm_ecu >>
+                                                                                            ELSE /\ TRUE
+                                                                                                 /\ UNCHANGED << comfortable_stop_operator_request, 
+                                                                                                                 switch, 
                                                                                                                  current_mrm_ecu >>
-                                                                                            ELSE /\ switch' = [switch EXCEPT !.state = initial_selected_ecu]
-                                                                                                 /\ current_mrm_ecu' = initial_selected_ecu
-                                                                                                 /\ UNCHANGED comfortable_stop_operator_request
                                                                       ELSE /\ IF voter_state'.mrm_ecu = extra_ecu
                                                                                  THEN /\ IF emergency_stop_operator_status["supervisor"] = "operating"
                                                                                             THEN /\ emergency_stop_operator_request' = [emergency_stop_operator_request EXCEPT !["supervisor"] = "cancel"]
                                                                                             ELSE /\ TRUE
                                                                                                  /\ UNCHANGED emergency_stop_operator_request
-                                                                                      /\ IF emergency_stop_operator_status[extra_ecu] /= "operating" /\ comfortable_stop_operator_status[extra_ecu] /= "operating"
+                                                                                      /\ IF emergency_stop_operator_status[extra_ecu] /= "operating"
                                                                                             THEN /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![extra_ecu] = "operate"]
-                                                                                                 /\ UNCHANGED << switch, 
+                                                                                                 /\ IF comfortable_stop_operator_status[extra_ecu] = "operating"
+                                                                                                       THEN /\ switch' = [switch EXCEPT !.state = extra_ecu]
+                                                                                                            /\ current_mrm_ecu' = extra_ecu
+                                                                                                       ELSE /\ TRUE
+                                                                                                            /\ UNCHANGED << switch, 
+                                                                                                                            current_mrm_ecu >>
+                                                                                            ELSE /\ TRUE
+                                                                                                 /\ UNCHANGED << comfortable_stop_operator_request, 
+                                                                                                                 switch, 
                                                                                                                  current_mrm_ecu >>
-                                                                                            ELSE /\ switch' = [switch EXCEPT !.state = extra_ecu]
-                                                                                                 /\ current_mrm_ecu' = extra_ecu
-                                                                                                 /\ UNCHANGED comfortable_stop_operator_request
                                                                                  ELSE /\ TRUE
                                                                                       /\ UNCHANGED << emergency_stop_operator_request, 
                                                                                                       comfortable_stop_operator_request, 
@@ -2596,7 +2653,8 @@ Voter == /\ pc["voter"] = "Voter"
                                     sub_external_monitoring_int, 
                                     supervisor_external_monitoring_int, 
                                     current_mrm_ecu >>
-         /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, fault_queue, 
+         /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, faults, 
+                         faults_and_no_faults, fault_queue, no_fault, 
                          self_faults, external_faults, EmergencyHandlers, 
                          emergency_handler_status, SelfMonitorings, 
                          ExternalMonitorings, self_monitoring_results, 
@@ -2625,7 +2683,8 @@ Vehicle == /\ pc["vehicle"] = "Vehicle"
                             ELSE /\ TRUE
                                  /\ UNCHANGED vehicle_status
            /\ pc' = [pc EXCEPT !["vehicle"] = "Vehicle"]
-           /\ UNCHANGED << fault_ecu, faults, no_fault, e_faults, fault_queue, 
+           /\ UNCHANGED << fault_ecu, s_faults, no_faults, e_faults, faults, 
+                           faults_and_no_faults, fault_queue, no_fault, 
                            self_faults, external_faults, EmergencyHandlers, 
                            emergency_handler_status, SelfMonitorings, 
                            ExternalMonitorings, self_monitoring_results, 
