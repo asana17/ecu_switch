@@ -31,7 +31,6 @@ variables
   EmergencyStopServices = {"main_emergency_stop_service", "sub_emergency_stop_service", "supervisor_emergency_stop_service"},
   EmergencyStopOperators = {"main_emergency_stop_operator", "sub_emergency_stop_operator", "supervisor_emergency_stop_operator"},
   ComfortableStopServices = {"main_comfortable_stop_service", "sub_comfortable_stop_service"}, \* No comfortable_stop operator in Supervisor
-  ComfortableStopOperators = {"main_comfortable_stop_operator", "sub_comfortable_stop_operator"},
   emergency_stop_operator_status = [main |-> "available", sub |-> "available", supervisor |-> "available"],
   comfortable_stop_operator_status = [main |-> "available", sub |-> "available", supervisor |-> "available"],
   no_error = [is_emergency |-> FALSE, stop_operation_needed |-> FALSE, switch_needed |-> FALSE],
@@ -630,36 +629,13 @@ begin
     end while;
 end process;
 
-
-\* operate emergency_stop or comfortable_stop in each ECU
-(*process emergency_stop_operator \in EmergencyStopOperators
-variables
-  ecu =
-    IF self = "main_emergency_stop_operator" THEN "main"
-    ELSE IF self = "sub_emergency_stop_operator" THEN "sub"
-    ELSE "supervisor";
+fair process emergency_stop_operator = "emergency_stop_operator"
 begin
   OperateEmergencyStop:
     while TRUE do
-      if switch.state = ecu then
-        if emergency_stop_operator_status[ecu] = "operating" then
-          vehicle_status := "emergency_operating";
-        else
-          vehicle_status := "running";
-        end if;
-      end if;
-    end while;
-end process;*)
-
-fair process main_emergency_stop_operator ="main_emergency_stop_operator"
-variables
-  ecu = "main"
-begin
-  OperateEmergencyStop:
-    while TRUE do
-      if switch.state = ecu then
+      if switch.state \in {"main", "sub", "supervisor"} then
         if vehicle_status /= "emergency_stopped" /\ vehicle_status /= "comfortable_stopped" then
-          if emergency_stop_operator_status[ecu] = "operating" then
+          if emergency_stop_operator_status[switch.state] = "operating" then
             vehicle_status := "emergency_operating";
           else
             vehicle_status := "running";
@@ -669,73 +645,14 @@ begin
     end while;
 end process;
 
-fair process sub_emergency_stop_operator ="sub_emergency_stop_operator"
-variables
-  ecu = "sub"
+fair process comfortable_stop_operator = "comfortable_stop_operator"
 begin
-  OperateEmergencyStop:
+  OperateComfortableStop:
     while TRUE do
-      if switch.state = ecu then
-        if vehicle_status /= "emergency_stopped" /\ vehicle_status /= "comfortable_stopped" then
-          if emergency_stop_operator_status[ecu] = "operating" then
-            vehicle_status := "emergency_operating";
-          else
-            vehicle_status := "running";
-          end if;
-        end if;
-      end if;
-    end while;
-end process;
-
-fair process supervisor_emergency_stop_operator ="supervisor_emergency_stop_operator"
-variables
-  ecu = "supervisor"
-begin
-  OperateEmergencyStop:
-    while TRUE do
-      if switch.state = ecu then
-        if vehicle_status /= "emergency_stopped" /\ vehicle_status /= "comfortable_stopped" then
-          if emergency_stop_operator_status[ecu] = "operating" then
-            vehicle_status := "emergency_operating";
-          else
-            vehicle_status := "running";
-          end if;
-        end if;
-      end if;
-    end while;
-end process;
-
-
-(*process comfortable_stop_operator \in ComfortableStopOperators
-variables
-  ecu =
-    IF self = "main_comfortable_stop_operator" THEN "main" ELSE "sub";
-begin
-  OperatecomfortableStop:
-    while TRUE do
-      if switch.state = ecu then
-        if comfortable_stop_operator_status[ecu] = "operating" then
-          if emergency_stop_operator_status[ecu] = "operating" then
-            no_operation_during_emergency := FALSE;
-          end if;
-          vehicle_status := "comfortable_operating";
-        else
-          vehicle_status := "running";
-        end if;
-      end if;
-    end while;
-end process;*)
-
-fair process main_comfortable_stop_operator = "main_comfortable_stop_operator"
-variables
-  ecu = "main";
-begin
-  OperatecomfortableStop:
-    while TRUE do
-      if switch.state = ecu then
+      if switch.state \in {"main", "sub"} then
         if vehicle_status /= "comfortable_stopped" then
-          if comfortable_stop_operator_status[ecu] = "operating" then
-            if emergency_stop_operator_status[ecu] = "operating" then
+          if comfortable_stop_operator_status[switch.state] = "operating" then
+            if emergency_stop_operator_status[switch.state] = "operating" then
               no_operation_during_emergency := FALSE;
             end if;
             vehicle_status := "comfortable_operating";
@@ -746,29 +663,6 @@ begin
       end if;
     end while;
 end process;
-
-fair process sub_comfortable_stop_operator = "sub_comfortable_stop_operator"
-variables
-  ecu = "sub";
-begin
-  OperatecomfortableStop:
-    while TRUE do
-      if switch.state = ecu then
-        if vehicle_status /= "comfortable_stopped" then
-          if comfortable_stop_operator_status[ecu] = "operating" then
-            if emergency_stop_operator_status[ecu] = "operating" then
-              no_operation_during_emergency := FALSE;
-            end if;
-            vehicle_status := "comfortable_operating";
-          elsif vehicle_status /= "emergency_stopped" then
-            vehicle_status := "running";
-          end if;
-        end if;
-      end if;
-    end while;
-end process;
-
-
 
 \* decide which ECU to operate MRM
 fair process voter = "voter"
@@ -846,39 +740,31 @@ begin
 end process;
 
 end algorithm; *)
-\* BEGIN TRANSLATION (chksum(pcal) = "78fe8bf" /\ chksum(tla) = "3a39585b")
-\* Label SelfMonitoring of process main_self_monitoring at line 429 col 5 changed to SelfMonitoring_
-\* Label SelfMonitoring of process sub_self_monitoring at line 439 col 5 changed to SelfMonitoring_s
-\* Label ExternalMonitoring of process main_external_monitoring at line 473 col 5 changed to ExternalMonitoring_
-\* Label ExternalMonitoring of process sub_external_monitoring at line 483 col 5 changed to ExternalMonitoring_s
-\* Label EmergencyHandling of process main_emergency_handler at line 525 col 5 changed to EmergencyHandling_
-\* Label EmergencyStopService of process main_emergency_stop_service at line 570 col 5 changed to EmergencyStopService_
-\* Label EmergencyStopService of process sub_emergency_stop_service at line 581 col 5 changed to EmergencyStopService_s
-\* Label ComfortableStopService of process main_comfortable_stop_service at line 616 col 5 changed to ComfortableStopService_
-\* Label OperateEmergencyStop of process main_emergency_stop_operator at line 659 col 5 changed to OperateEmergencyStop_
-\* Label OperateEmergencyStop of process sub_emergency_stop_operator at line 677 col 5 changed to OperateEmergencyStop_s
-\* Label OperatecomfortableStop of process main_comfortable_stop_operator at line 734 col 5 changed to OperatecomfortableStop_
-\* Process variable ecu of process main_self_monitoring at line 426 col 3 changed to ecu_
-\* Process variable ecu of process sub_self_monitoring at line 436 col 3 changed to ecu_s
-\* Process variable ecu of process supervisor_self_monitoring at line 446 col 3 changed to ecu_su
-\* Process variable ecu of process main_external_monitoring at line 470 col 3 changed to ecu_m
-\* Process variable ecu of process sub_external_monitoring at line 480 col 3 changed to ecu_sub
-\* Process variable ecu of process supervisor_external_monitoring at line 490 col 3 changed to ecu_sup
-\* Process variable is_emergency of process main_emergency_handler at line 518 col 3 changed to is_emergency_
-\* Process variable current_mrm_behavior of process main_emergency_handler at line 519 col 3 changed to current_mrm_behavior_
-\* Process variable mrm_state of process main_emergency_handler at line 520 col 3 changed to mrm_state_
-\* Process variable mrm_behavior of process main_emergency_handler at line 521 col 3 changed to mrm_behavior_
-\* Process variable ecu of process main_emergency_handler at line 522 col 3 changed to ecu_ma
-\* Process variable ecu of process sub_emergency_handler at line 539 col 3 changed to ecu_sub_
-\* Process variable ecu of process main_emergency_stop_service at line 567 col 1 changed to ecu_mai
-\* Process variable ecu of process sub_emergency_stop_service at line 578 col 1 changed to ecu_sub_e
-\* Process variable ecu of process supervisor_emergency_stop_service at line 589 col 1 changed to ecu_supe
-\* Process variable ecu of process main_comfortable_stop_service at line 613 col 1 changed to ecu_main
-\* Process variable ecu of process sub_comfortable_stop_service at line 624 col 1 changed to ecu_sub_c
-\* Process variable ecu of process main_emergency_stop_operator at line 656 col 3 changed to ecu_main_
-\* Process variable ecu of process sub_emergency_stop_operator at line 674 col 3 changed to ecu_sub_em
-\* Process variable ecu of process supervisor_emergency_stop_operator at line 692 col 3 changed to ecu_super
-\* Process variable ecu of process main_comfortable_stop_operator at line 731 col 3 changed to ecu_main_c
+\* BEGIN TRANSLATION (chksum(pcal) = "f94f54aa" /\ chksum(tla) = "32832481")
+\* Label SelfMonitoring of process main_self_monitoring at line 428 col 5 changed to SelfMonitoring_
+\* Label SelfMonitoring of process sub_self_monitoring at line 438 col 5 changed to SelfMonitoring_s
+\* Label ExternalMonitoring of process main_external_monitoring at line 472 col 5 changed to ExternalMonitoring_
+\* Label ExternalMonitoring of process sub_external_monitoring at line 482 col 5 changed to ExternalMonitoring_s
+\* Label EmergencyHandling of process main_emergency_handler at line 524 col 5 changed to EmergencyHandling_
+\* Label EmergencyStopService of process main_emergency_stop_service at line 569 col 5 changed to EmergencyStopService_
+\* Label EmergencyStopService of process sub_emergency_stop_service at line 580 col 5 changed to EmergencyStopService_s
+\* Label ComfortableStopService of process main_comfortable_stop_service at line 615 col 5 changed to ComfortableStopService_
+\* Process variable ecu of process main_self_monitoring at line 425 col 3 changed to ecu_
+\* Process variable ecu of process sub_self_monitoring at line 435 col 3 changed to ecu_s
+\* Process variable ecu of process supervisor_self_monitoring at line 445 col 3 changed to ecu_su
+\* Process variable ecu of process main_external_monitoring at line 469 col 3 changed to ecu_m
+\* Process variable ecu of process sub_external_monitoring at line 479 col 3 changed to ecu_sub
+\* Process variable ecu of process supervisor_external_monitoring at line 489 col 3 changed to ecu_sup
+\* Process variable is_emergency of process main_emergency_handler at line 517 col 3 changed to is_emergency_
+\* Process variable current_mrm_behavior of process main_emergency_handler at line 518 col 3 changed to current_mrm_behavior_
+\* Process variable mrm_state of process main_emergency_handler at line 519 col 3 changed to mrm_state_
+\* Process variable mrm_behavior of process main_emergency_handler at line 520 col 3 changed to mrm_behavior_
+\* Process variable ecu of process main_emergency_handler at line 521 col 3 changed to ecu_ma
+\* Process variable ecu of process sub_emergency_handler at line 538 col 3 changed to ecu_sub_
+\* Process variable ecu of process main_emergency_stop_service at line 566 col 1 changed to ecu_mai
+\* Process variable ecu of process sub_emergency_stop_service at line 577 col 1 changed to ecu_sub_e
+\* Process variable ecu of process supervisor_emergency_stop_service at line 588 col 1 changed to ecu_supe
+\* Process variable ecu of process main_comfortable_stop_service at line 612 col 1 changed to ecu_main
 CONSTANT defaultInitValue
 VARIABLES fault_ecu, s_faults, no_faults, e_faults, faults, 
           faults_and_no_faults, fault_queue, no_fault, self_faults, 
@@ -887,14 +773,13 @@ VARIABLES fault_ecu, s_faults, no_faults, e_faults, faults,
           external_monitoring_results, emergency_stop_operator_request, 
           comfortable_stop_operator_request, EmergencyStopServices, 
           EmergencyStopOperators, ComfortableStopServices, 
-          ComfortableStopOperators, emergency_stop_operator_status, 
-          comfortable_stop_operator_status, no_error, main_self_error_status, 
-          sub_self_error_status, supervisor_self_error_status, 
-          main_external_error_status, sub_external_error_status, 
-          supervisor_external_error_status, voter_state, mrm_operation, 
-          vehicle_status, initial_selected_ecu, extra_ecu, switch, 
-          is_stop_operator_succeeded, self_recoverable_flag, 
-          no_operation_during_emergency, pc
+          emergency_stop_operator_status, comfortable_stop_operator_status, 
+          no_error, main_self_error_status, sub_self_error_status, 
+          supervisor_self_error_status, main_external_error_status, 
+          sub_external_error_status, supervisor_external_error_status, 
+          voter_state, mrm_operation, vehicle_status, initial_selected_ecu, 
+          extra_ecu, switch, is_stop_operator_succeeded, 
+          self_recoverable_flag, no_operation_during_emergency, pc
 
 (* define statement *)
 VehicleStopped == <>[](vehicle_status = "emergency_stopped" \/ vehicle_status = "comfortable_stopped")
@@ -903,8 +788,7 @@ NoOperationDuringEmergency == no_operation_during_emergency
 VARIABLES fault, ecu_, ecu_s, ecu_su, ecu_m, ecu_sub, ecu_sup, is_emergency_, 
           current_mrm_behavior_, mrm_state_, mrm_behavior_, ecu_ma, 
           is_emergency, current_mrm_behavior, mrm_state, mrm_behavior, 
-          ecu_sub_, ecu_mai, ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, 
-          ecu_main_, ecu_sub_em, ecu_super, ecu_main_c, ecu, 
+          ecu_sub_, ecu_mai, ecu_sub_e, ecu_supe, ecu_main, ecu, 
           self_monitoring_count, main_self_monitoring_int, 
           sub_self_monitoring_int, supervisor_self_monitoring_int, 
           external_monitoring_count, main_external_monitoring_int, 
@@ -918,25 +802,24 @@ vars == << fault_ecu, s_faults, no_faults, e_faults, faults,
            external_monitoring_results, emergency_stop_operator_request, 
            comfortable_stop_operator_request, EmergencyStopServices, 
            EmergencyStopOperators, ComfortableStopServices, 
-           ComfortableStopOperators, emergency_stop_operator_status, 
-           comfortable_stop_operator_status, no_error, main_self_error_status, 
-           sub_self_error_status, supervisor_self_error_status, 
-           main_external_error_status, sub_external_error_status, 
-           supervisor_external_error_status, voter_state, mrm_operation, 
-           vehicle_status, initial_selected_ecu, extra_ecu, switch, 
-           is_stop_operator_succeeded, self_recoverable_flag, 
-           no_operation_during_emergency, pc, fault, ecu_, ecu_s, ecu_su, 
-           ecu_m, ecu_sub, ecu_sup, is_emergency_, current_mrm_behavior_, 
-           mrm_state_, mrm_behavior_, ecu_ma, is_emergency, 
-           current_mrm_behavior, mrm_state, mrm_behavior, ecu_sub_, ecu_mai, 
-           ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, ecu_main_, ecu_sub_em, 
-           ecu_super, ecu_main_c, ecu, self_monitoring_count, 
-           main_self_monitoring_int, sub_self_monitoring_int, 
-           supervisor_self_monitoring_int, external_monitoring_count, 
-           main_external_monitoring_int, sub_external_monitoring_int, 
-           supervisor_external_monitoring_int, current_mrm_ecu >>
+           emergency_stop_operator_status, comfortable_stop_operator_status, 
+           no_error, main_self_error_status, sub_self_error_status, 
+           supervisor_self_error_status, main_external_error_status, 
+           sub_external_error_status, supervisor_external_error_status, 
+           voter_state, mrm_operation, vehicle_status, initial_selected_ecu, 
+           extra_ecu, switch, is_stop_operator_succeeded, 
+           self_recoverable_flag, no_operation_during_emergency, pc, fault, 
+           ecu_, ecu_s, ecu_su, ecu_m, ecu_sub, ecu_sup, is_emergency_, 
+           current_mrm_behavior_, mrm_state_, mrm_behavior_, ecu_ma, 
+           is_emergency, current_mrm_behavior, mrm_state, mrm_behavior, 
+           ecu_sub_, ecu_mai, ecu_sub_e, ecu_supe, ecu_main, ecu, 
+           self_monitoring_count, main_self_monitoring_int, 
+           sub_self_monitoring_int, supervisor_self_monitoring_int, 
+           external_monitoring_count, main_external_monitoring_int, 
+           sub_external_monitoring_int, supervisor_external_monitoring_int, 
+           current_mrm_ecu >>
 
-ProcSet == {"safety_mechanism"} \cup {"main_self_monitoring"} \cup {"sub_self_monitoring"} \cup {"supervisor_self_monitoring"} \cup {"main_external_monitoring"} \cup {"sub_external_monitoring"} \cup {"supervisor_external_monitoring"} \cup {"main_emergency_handler"} \cup {"sub_emergency_handler"} \cup {"main_emergency_stop_service"} \cup {"sub_emergency_stop_service"} \cup {"supervisor_emergency_stop_service"} \cup {"main_comfortable_stop_service"} \cup {"sub_comfortable_stop_service"} \cup {"main_emergency_stop_operator"} \cup {"sub_emergency_stop_operator"} \cup {"supervisor_emergency_stop_operator"} \cup {"main_comfortable_stop_operator"} \cup {"sub_comfortable_stop_operator"} \cup {"voter"} \cup {"vehicle"}
+ProcSet == {"safety_mechanism"} \cup {"main_self_monitoring"} \cup {"sub_self_monitoring"} \cup {"supervisor_self_monitoring"} \cup {"main_external_monitoring"} \cup {"sub_external_monitoring"} \cup {"supervisor_external_monitoring"} \cup {"main_emergency_handler"} \cup {"sub_emergency_handler"} \cup {"main_emergency_stop_service"} \cup {"sub_emergency_stop_service"} \cup {"supervisor_emergency_stop_service"} \cup {"main_comfortable_stop_service"} \cup {"sub_comfortable_stop_service"} \cup {"emergency_stop_operator"} \cup {"comfortable_stop_operator"} \cup {"voter"} \cup {"vehicle"}
 
 Init == (* Global variables *)
         /\ fault_ecu \in ECUs
@@ -960,7 +843,6 @@ Init == (* Global variables *)
         /\ EmergencyStopServices = {"main_emergency_stop_service", "sub_emergency_stop_service", "supervisor_emergency_stop_service"}
         /\ EmergencyStopOperators = {"main_emergency_stop_operator", "sub_emergency_stop_operator", "supervisor_emergency_stop_operator"}
         /\ ComfortableStopServices = {"main_comfortable_stop_service", "sub_comfortable_stop_service"}
-        /\ ComfortableStopOperators = {"main_comfortable_stop_operator", "sub_comfortable_stop_operator"}
         /\ emergency_stop_operator_status = [main |-> "available", sub |-> "available", supervisor |-> "available"]
         /\ comfortable_stop_operator_status = [main |-> "available", sub |-> "available", supervisor |-> "available"]
         /\ no_error = [is_emergency |-> FALSE, stop_operation_needed |-> FALSE, switch_needed |-> FALSE]
@@ -1014,16 +896,6 @@ Init == (* Global variables *)
         (* Process main_comfortable_stop_service *)
         /\ ecu_main = "main"
         (* Process sub_comfortable_stop_service *)
-        /\ ecu_sub_c = "sub"
-        (* Process main_emergency_stop_operator *)
-        /\ ecu_main_ = "main"
-        (* Process sub_emergency_stop_operator *)
-        /\ ecu_sub_em = "sub"
-        (* Process supervisor_emergency_stop_operator *)
-        /\ ecu_super = "supervisor"
-        (* Process main_comfortable_stop_operator *)
-        /\ ecu_main_c = "main"
-        (* Process sub_comfortable_stop_operator *)
         /\ ecu = "sub"
         (* Process voter *)
         /\ self_monitoring_count = 0
@@ -1049,11 +921,8 @@ Init == (* Global variables *)
                                         [] self = "supervisor_emergency_stop_service" -> "EmergencyStopService"
                                         [] self = "main_comfortable_stop_service" -> "ComfortableStopService_"
                                         [] self = "sub_comfortable_stop_service" -> "ComfortableStopService"
-                                        [] self = "main_emergency_stop_operator" -> "OperateEmergencyStop_"
-                                        [] self = "sub_emergency_stop_operator" -> "OperateEmergencyStop_s"
-                                        [] self = "supervisor_emergency_stop_operator" -> "OperateEmergencyStop"
-                                        [] self = "main_comfortable_stop_operator" -> "OperatecomfortableStop_"
-                                        [] self = "sub_comfortable_stop_operator" -> "OperatecomfortableStop"
+                                        [] self = "emergency_stop_operator" -> "OperateEmergencyStop"
+                                        [] self = "comfortable_stop_operator" -> "OperateComfortableStop"
                                         [] self = "voter" -> "Voter"
                                         [] self = "vehicle" -> "Vehicle"]
 
@@ -1090,7 +959,6 @@ SafetyMechanism == /\ pc["safety_mechanism"] = "SafetyMechanism"
                                    EmergencyStopServices, 
                                    EmergencyStopOperators, 
                                    ComfortableStopServices, 
-                                   ComfortableStopOperators, 
                                    emergency_stop_operator_status, 
                                    comfortable_stop_operator_status, no_error, 
                                    main_self_error_status, 
@@ -1109,9 +977,8 @@ SafetyMechanism == /\ pc["safety_mechanism"] = "SafetyMechanism"
                                    mrm_state_, mrm_behavior_, ecu_ma, 
                                    is_emergency, current_mrm_behavior, 
                                    mrm_state, mrm_behavior, ecu_sub_, ecu_mai, 
-                                   ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, 
-                                   ecu_main_, ecu_sub_em, ecu_super, 
-                                   ecu_main_c, ecu, self_monitoring_count, 
+                                   ecu_sub_e, ecu_supe, ecu_main, ecu, 
+                                   self_monitoring_count, 
                                    main_self_monitoring_int, 
                                    sub_self_monitoring_int, 
                                    supervisor_self_monitoring_int, 
@@ -1139,7 +1006,6 @@ SelfMonitoring_ == /\ pc["main_self_monitoring"] = "SelfMonitoring_"
                                    EmergencyStopServices, 
                                    EmergencyStopOperators, 
                                    ComfortableStopServices, 
-                                   ComfortableStopOperators, 
                                    emergency_stop_operator_status, 
                                    comfortable_stop_operator_status, no_error, 
                                    main_self_error_status, 
@@ -1158,9 +1024,8 @@ SelfMonitoring_ == /\ pc["main_self_monitoring"] = "SelfMonitoring_"
                                    mrm_state_, mrm_behavior_, ecu_ma, 
                                    is_emergency, current_mrm_behavior, 
                                    mrm_state, mrm_behavior, ecu_sub_, ecu_mai, 
-                                   ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, 
-                                   ecu_main_, ecu_sub_em, ecu_super, 
-                                   ecu_main_c, ecu, self_monitoring_count, 
+                                   ecu_sub_e, ecu_supe, ecu_main, ecu, 
+                                   self_monitoring_count, 
                                    main_self_monitoring_int, 
                                    sub_self_monitoring_int, 
                                    supervisor_self_monitoring_int, 
@@ -1189,7 +1054,6 @@ SelfMonitoring_s == /\ pc["sub_self_monitoring"] = "SelfMonitoring_s"
                                     EmergencyStopServices, 
                                     EmergencyStopOperators, 
                                     ComfortableStopServices, 
-                                    ComfortableStopOperators, 
                                     emergency_stop_operator_status, 
                                     comfortable_stop_operator_status, no_error, 
                                     main_self_error_status, 
@@ -1208,9 +1072,8 @@ SelfMonitoring_s == /\ pc["sub_self_monitoring"] = "SelfMonitoring_s"
                                     mrm_state_, mrm_behavior_, ecu_ma, 
                                     is_emergency, current_mrm_behavior, 
                                     mrm_state, mrm_behavior, ecu_sub_, ecu_mai, 
-                                    ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, 
-                                    ecu_main_, ecu_sub_em, ecu_super, 
-                                    ecu_main_c, ecu, self_monitoring_count, 
+                                    ecu_sub_e, ecu_supe, ecu_main, ecu, 
+                                    self_monitoring_count, 
                                     main_self_monitoring_int, 
                                     sub_self_monitoring_int, 
                                     supervisor_self_monitoring_int, 
@@ -1238,7 +1101,6 @@ SelfMonitoring == /\ pc["supervisor_self_monitoring"] = "SelfMonitoring"
                                   EmergencyStopServices, 
                                   EmergencyStopOperators, 
                                   ComfortableStopServices, 
-                                  ComfortableStopOperators, 
                                   emergency_stop_operator_status, 
                                   comfortable_stop_operator_status, no_error, 
                                   main_self_error_status, 
@@ -1257,9 +1119,8 @@ SelfMonitoring == /\ pc["supervisor_self_monitoring"] = "SelfMonitoring"
                                   mrm_state_, mrm_behavior_, ecu_ma, 
                                   is_emergency, current_mrm_behavior, 
                                   mrm_state, mrm_behavior, ecu_sub_, ecu_mai, 
-                                  ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, 
-                                  ecu_main_, ecu_sub_em, ecu_super, ecu_main_c, 
-                                  ecu, self_monitoring_count, 
+                                  ecu_sub_e, ecu_supe, ecu_main, ecu, 
+                                  self_monitoring_count, 
                                   main_self_monitoring_int, 
                                   sub_self_monitoring_int, 
                                   supervisor_self_monitoring_int, 
@@ -1288,7 +1149,6 @@ ExternalMonitoring_ == /\ pc["main_external_monitoring"] = "ExternalMonitoring_"
                                        EmergencyStopServices, 
                                        EmergencyStopOperators, 
                                        ComfortableStopServices, 
-                                       ComfortableStopOperators, 
                                        emergency_stop_operator_status, 
                                        comfortable_stop_operator_status, 
                                        no_error, main_self_error_status, 
@@ -1309,9 +1169,7 @@ ExternalMonitoring_ == /\ pc["main_external_monitoring"] = "ExternalMonitoring_"
                                        mrm_behavior_, ecu_ma, is_emergency, 
                                        current_mrm_behavior, mrm_state, 
                                        mrm_behavior, ecu_sub_, ecu_mai, 
-                                       ecu_sub_e, ecu_supe, ecu_main, 
-                                       ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                       ecu_super, ecu_main_c, ecu, 
+                                       ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                        self_monitoring_count, 
                                        main_self_monitoring_int, 
                                        sub_self_monitoring_int, 
@@ -1341,7 +1199,6 @@ ExternalMonitoring_s == /\ pc["sub_external_monitoring"] = "ExternalMonitoring_s
                                         EmergencyStopServices, 
                                         EmergencyStopOperators, 
                                         ComfortableStopServices, 
-                                        ComfortableStopOperators, 
                                         emergency_stop_operator_status, 
                                         comfortable_stop_operator_status, 
                                         no_error, main_self_error_status, 
@@ -1362,9 +1219,7 @@ ExternalMonitoring_s == /\ pc["sub_external_monitoring"] = "ExternalMonitoring_s
                                         mrm_behavior_, ecu_ma, is_emergency, 
                                         current_mrm_behavior, mrm_state, 
                                         mrm_behavior, ecu_sub_, ecu_mai, 
-                                        ecu_sub_e, ecu_supe, ecu_main, 
-                                        ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                        ecu_super, ecu_main_c, ecu, 
+                                        ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                         self_monitoring_count, 
                                         main_self_monitoring_int, 
                                         sub_self_monitoring_int, 
@@ -1394,7 +1249,6 @@ ExternalMonitoring == /\ pc["supervisor_external_monitoring"] = "ExternalMonitor
                                       EmergencyStopServices, 
                                       EmergencyStopOperators, 
                                       ComfortableStopServices, 
-                                      ComfortableStopOperators, 
                                       emergency_stop_operator_status, 
                                       comfortable_stop_operator_status, 
                                       no_error, main_self_error_status, 
@@ -1415,9 +1269,8 @@ ExternalMonitoring == /\ pc["supervisor_external_monitoring"] = "ExternalMonitor
                                       mrm_behavior_, ecu_ma, is_emergency, 
                                       current_mrm_behavior, mrm_state, 
                                       mrm_behavior, ecu_sub_, ecu_mai, 
-                                      ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, 
-                                      ecu_main_, ecu_sub_em, ecu_super, 
-                                      ecu_main_c, ecu, self_monitoring_count, 
+                                      ecu_sub_e, ecu_supe, ecu_main, ecu, 
+                                      self_monitoring_count, 
                                       main_self_monitoring_int, 
                                       sub_self_monitoring_int, 
                                       supervisor_self_monitoring_int, 
@@ -1518,7 +1371,6 @@ EmergencyHandling_ == /\ pc["main_emergency_handler"] = "EmergencyHandling_"
                                       EmergencyStopServices, 
                                       EmergencyStopOperators, 
                                       ComfortableStopServices, 
-                                      ComfortableStopOperators, 
                                       emergency_stop_operator_status, 
                                       comfortable_stop_operator_status, 
                                       no_error, main_self_error_status, 
@@ -1537,9 +1389,8 @@ EmergencyHandling_ == /\ pc["main_emergency_handler"] = "EmergencyHandling_"
                                       ecu_sup, ecu_ma, is_emergency, 
                                       current_mrm_behavior, mrm_state, 
                                       mrm_behavior, ecu_sub_, ecu_mai, 
-                                      ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, 
-                                      ecu_main_, ecu_sub_em, ecu_super, 
-                                      ecu_main_c, ecu, self_monitoring_count, 
+                                      ecu_sub_e, ecu_supe, ecu_main, ecu, 
+                                      self_monitoring_count, 
                                       main_self_monitoring_int, 
                                       sub_self_monitoring_int, 
                                       supervisor_self_monitoring_int, 
@@ -1640,7 +1491,6 @@ EmergencyHandling == /\ pc["sub_emergency_handler"] = "EmergencyHandling"
                                      EmergencyStopServices, 
                                      EmergencyStopOperators, 
                                      ComfortableStopServices, 
-                                     ComfortableStopOperators, 
                                      emergency_stop_operator_status, 
                                      comfortable_stop_operator_status, 
                                      no_error, main_self_error_status, 
@@ -1659,9 +1509,8 @@ EmergencyHandling == /\ pc["sub_emergency_handler"] = "EmergencyHandling"
                                      ecu_sup, is_emergency_, 
                                      current_mrm_behavior_, mrm_state_, 
                                      mrm_behavior_, ecu_ma, ecu_sub_, ecu_mai, 
-                                     ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, 
-                                     ecu_main_, ecu_sub_em, ecu_super, 
-                                     ecu_main_c, ecu, self_monitoring_count, 
+                                     ecu_sub_e, ecu_supe, ecu_main, ecu, 
+                                     self_monitoring_count, 
                                      main_self_monitoring_int, 
                                      sub_self_monitoring_int, 
                                      supervisor_self_monitoring_int, 
@@ -1710,8 +1559,7 @@ EmergencyStopService_ == /\ pc["main_emergency_stop_service"] = "EmergencyStopSe
                                          external_monitoring_results, 
                                          EmergencyStopServices, 
                                          EmergencyStopOperators, 
-                                         ComfortableStopServices, 
-                                         ComfortableStopOperators, no_error, 
+                                         ComfortableStopServices, no_error, 
                                          main_self_error_status, 
                                          sub_self_error_status, 
                                          supervisor_self_error_status, 
@@ -1730,9 +1578,7 @@ EmergencyStopService_ == /\ pc["main_emergency_stop_service"] = "EmergencyStopSe
                                          mrm_behavior_, ecu_ma, is_emergency, 
                                          current_mrm_behavior, mrm_state, 
                                          mrm_behavior, ecu_sub_, ecu_mai, 
-                                         ecu_sub_e, ecu_supe, ecu_main, 
-                                         ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                         ecu_super, ecu_main_c, ecu, 
+                                         ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                          self_monitoring_count, 
                                          main_self_monitoring_int, 
                                          sub_self_monitoring_int, 
@@ -1782,8 +1628,7 @@ EmergencyStopService_s == /\ pc["sub_emergency_stop_service"] = "EmergencyStopSe
                                           external_monitoring_results, 
                                           EmergencyStopServices, 
                                           EmergencyStopOperators, 
-                                          ComfortableStopServices, 
-                                          ComfortableStopOperators, no_error, 
+                                          ComfortableStopServices, no_error, 
                                           main_self_error_status, 
                                           sub_self_error_status, 
                                           supervisor_self_error_status, 
@@ -1802,9 +1647,7 @@ EmergencyStopService_s == /\ pc["sub_emergency_stop_service"] = "EmergencyStopSe
                                           mrm_behavior_, ecu_ma, is_emergency, 
                                           current_mrm_behavior, mrm_state, 
                                           mrm_behavior, ecu_sub_, ecu_mai, 
-                                          ecu_sub_e, ecu_supe, ecu_main, 
-                                          ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                          ecu_super, ecu_main_c, ecu, 
+                                          ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                           self_monitoring_count, 
                                           main_self_monitoring_int, 
                                           sub_self_monitoring_int, 
@@ -1853,8 +1696,7 @@ EmergencyStopService == /\ pc["supervisor_emergency_stop_service"] = "EmergencyS
                                         external_monitoring_results, 
                                         EmergencyStopServices, 
                                         EmergencyStopOperators, 
-                                        ComfortableStopServices, 
-                                        ComfortableStopOperators, no_error, 
+                                        ComfortableStopServices, no_error, 
                                         main_self_error_status, 
                                         sub_self_error_status, 
                                         supervisor_self_error_status, 
@@ -1873,9 +1715,7 @@ EmergencyStopService == /\ pc["supervisor_emergency_stop_service"] = "EmergencyS
                                         mrm_behavior_, ecu_ma, is_emergency, 
                                         current_mrm_behavior, mrm_state, 
                                         mrm_behavior, ecu_sub_, ecu_mai, 
-                                        ecu_sub_e, ecu_supe, ecu_main, 
-                                        ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                        ecu_super, ecu_main_c, ecu, 
+                                        ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                         self_monitoring_count, 
                                         main_self_monitoring_int, 
                                         sub_self_monitoring_int, 
@@ -1926,8 +1766,7 @@ ComfortableStopService_ == /\ pc["main_comfortable_stop_service"] = "Comfortable
                                            external_monitoring_results, 
                                            EmergencyStopServices, 
                                            EmergencyStopOperators, 
-                                           ComfortableStopServices, 
-                                           ComfortableStopOperators, no_error, 
+                                           ComfortableStopServices, no_error, 
                                            main_self_error_status, 
                                            sub_self_error_status, 
                                            supervisor_self_error_status, 
@@ -1946,9 +1785,7 @@ ComfortableStopService_ == /\ pc["main_comfortable_stop_service"] = "Comfortable
                                            mrm_behavior_, ecu_ma, is_emergency, 
                                            current_mrm_behavior, mrm_state, 
                                            mrm_behavior, ecu_sub_, ecu_mai, 
-                                           ecu_sub_e, ecu_supe, ecu_main, 
-                                           ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                           ecu_super, ecu_main_c, ecu, 
+                                           ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                            self_monitoring_count, 
                                            main_self_monitoring_int, 
                                            sub_self_monitoring_int, 
@@ -1962,25 +1799,25 @@ ComfortableStopService_ == /\ pc["main_comfortable_stop_service"] = "Comfortable
 main_comfortable_stop_service == ComfortableStopService_
 
 ComfortableStopService == /\ pc["sub_comfortable_stop_service"] = "ComfortableStopService"
-                          /\ comfortable_stop_operator_request[ecu_sub_c] /= "none"
+                          /\ comfortable_stop_operator_request[ecu] /= "none"
                           /\ IF "comfortable_stop" = "emergency_stop"
-                                THEN /\ IF emergency_stop_operator_request[ecu_sub_c] = "operate"
-                                           THEN /\ emergency_stop_operator_status' = [emergency_stop_operator_status EXCEPT ![ecu_sub_c] = "operating"]
-                                           ELSE /\ IF emergency_stop_operator_request[ecu_sub_c] = "cancel"
-                                                      THEN /\ emergency_stop_operator_status' = [emergency_stop_operator_status EXCEPT ![ecu_sub_c] = "available"]
+                                THEN /\ IF emergency_stop_operator_request[ecu] = "operate"
+                                           THEN /\ emergency_stop_operator_status' = [emergency_stop_operator_status EXCEPT ![ecu] = "operating"]
+                                           ELSE /\ IF emergency_stop_operator_request[ecu] = "cancel"
+                                                      THEN /\ emergency_stop_operator_status' = [emergency_stop_operator_status EXCEPT ![ecu] = "available"]
                                                       ELSE /\ TRUE
                                                            /\ UNCHANGED emergency_stop_operator_status
-                                     /\ emergency_stop_operator_request' = [emergency_stop_operator_request EXCEPT ![ecu_sub_c] = "none"]
+                                     /\ emergency_stop_operator_request' = [emergency_stop_operator_request EXCEPT ![ecu] = "none"]
                                      /\ UNCHANGED << comfortable_stop_operator_request, 
                                                      comfortable_stop_operator_status >>
                                 ELSE /\ IF "comfortable_stop" = "comfortable_stop"
-                                           THEN /\ IF comfortable_stop_operator_request[ecu_sub_c] = "operate"
-                                                      THEN /\ comfortable_stop_operator_status' = [comfortable_stop_operator_status EXCEPT ![ecu_sub_c] = "operating"]
-                                                      ELSE /\ IF comfortable_stop_operator_request[ecu_sub_c] = "cancel"
-                                                                 THEN /\ comfortable_stop_operator_status' = [comfortable_stop_operator_status EXCEPT ![ecu_sub_c] = "available"]
+                                           THEN /\ IF comfortable_stop_operator_request[ecu] = "operate"
+                                                      THEN /\ comfortable_stop_operator_status' = [comfortable_stop_operator_status EXCEPT ![ecu] = "operating"]
+                                                      ELSE /\ IF comfortable_stop_operator_request[ecu] = "cancel"
+                                                                 THEN /\ comfortable_stop_operator_status' = [comfortable_stop_operator_status EXCEPT ![ecu] = "available"]
                                                                  ELSE /\ TRUE
                                                                       /\ UNCHANGED comfortable_stop_operator_status
-                                                /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![ecu_sub_c] = "none"]
+                                                /\ comfortable_stop_operator_request' = [comfortable_stop_operator_request EXCEPT ![ecu] = "none"]
                                            ELSE /\ TRUE
                                                 /\ UNCHANGED << comfortable_stop_operator_request, 
                                                                 comfortable_stop_operator_status >>
@@ -1998,8 +1835,7 @@ ComfortableStopService == /\ pc["sub_comfortable_stop_service"] = "ComfortableSt
                                           external_monitoring_results, 
                                           EmergencyStopServices, 
                                           EmergencyStopOperators, 
-                                          ComfortableStopServices, 
-                                          ComfortableStopOperators, no_error, 
+                                          ComfortableStopServices, no_error, 
                                           main_self_error_status, 
                                           sub_self_error_status, 
                                           supervisor_self_error_status, 
@@ -2018,9 +1854,7 @@ ComfortableStopService == /\ pc["sub_comfortable_stop_service"] = "ComfortableSt
                                           mrm_behavior_, ecu_ma, is_emergency, 
                                           current_mrm_behavior, mrm_state, 
                                           mrm_behavior, ecu_sub_, ecu_mai, 
-                                          ecu_sub_e, ecu_supe, ecu_main, 
-                                          ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                          ecu_super, ecu_main_c, ecu, 
+                                          ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                           self_monitoring_count, 
                                           main_self_monitoring_int, 
                                           sub_self_monitoring_int, 
@@ -2033,137 +1867,17 @@ ComfortableStopService == /\ pc["sub_comfortable_stop_service"] = "ComfortableSt
 
 sub_comfortable_stop_service == ComfortableStopService
 
-OperateEmergencyStop_ == /\ pc["main_emergency_stop_operator"] = "OperateEmergencyStop_"
-                         /\ IF switch.state = ecu_main_
-                               THEN /\ IF vehicle_status /= "emergency_stopped" /\ vehicle_status /= "comfortable_stopped"
-                                          THEN /\ IF emergency_stop_operator_status[ecu_main_] = "operating"
-                                                     THEN /\ vehicle_status' = "emergency_operating"
-                                                     ELSE /\ vehicle_status' = "running"
-                                          ELSE /\ TRUE
-                                               /\ UNCHANGED vehicle_status
-                               ELSE /\ TRUE
-                                    /\ UNCHANGED vehicle_status
-                         /\ pc' = [pc EXCEPT !["main_emergency_stop_operator"] = "OperateEmergencyStop_"]
-                         /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
-                                         e_faults, faults, 
-                                         faults_and_no_faults, fault_queue, 
-                                         no_fault, self_faults, 
-                                         external_faults, EmergencyHandlers, 
-                                         emergency_handler_status, 
-                                         SelfMonitorings, ExternalMonitorings, 
-                                         self_monitoring_results, 
-                                         external_monitoring_results, 
-                                         emergency_stop_operator_request, 
-                                         comfortable_stop_operator_request, 
-                                         EmergencyStopServices, 
-                                         EmergencyStopOperators, 
-                                         ComfortableStopServices, 
-                                         ComfortableStopOperators, 
-                                         emergency_stop_operator_status, 
-                                         comfortable_stop_operator_status, 
-                                         no_error, main_self_error_status, 
-                                         sub_self_error_status, 
-                                         supervisor_self_error_status, 
-                                         main_external_error_status, 
-                                         sub_external_error_status, 
-                                         supervisor_external_error_status, 
-                                         voter_state, mrm_operation, 
-                                         initial_selected_ecu, extra_ecu, 
-                                         switch, is_stop_operator_succeeded, 
-                                         self_recoverable_flag, 
-                                         no_operation_during_emergency, fault, 
-                                         ecu_, ecu_s, ecu_su, ecu_m, ecu_sub, 
-                                         ecu_sup, is_emergency_, 
-                                         current_mrm_behavior_, mrm_state_, 
-                                         mrm_behavior_, ecu_ma, is_emergency, 
-                                         current_mrm_behavior, mrm_state, 
-                                         mrm_behavior, ecu_sub_, ecu_mai, 
-                                         ecu_sub_e, ecu_supe, ecu_main, 
-                                         ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                         ecu_super, ecu_main_c, ecu, 
-                                         self_monitoring_count, 
-                                         main_self_monitoring_int, 
-                                         sub_self_monitoring_int, 
-                                         supervisor_self_monitoring_int, 
-                                         external_monitoring_count, 
-                                         main_external_monitoring_int, 
-                                         sub_external_monitoring_int, 
-                                         supervisor_external_monitoring_int, 
-                                         current_mrm_ecu >>
-
-main_emergency_stop_operator == OperateEmergencyStop_
-
-OperateEmergencyStop_s == /\ pc["sub_emergency_stop_operator"] = "OperateEmergencyStop_s"
-                          /\ IF switch.state = ecu_sub_em
-                                THEN /\ IF vehicle_status /= "emergency_stopped" /\ vehicle_status /= "comfortable_stopped"
-                                           THEN /\ IF emergency_stop_operator_status[ecu_sub_em] = "operating"
-                                                      THEN /\ vehicle_status' = "emergency_operating"
-                                                      ELSE /\ vehicle_status' = "running"
-                                           ELSE /\ TRUE
-                                                /\ UNCHANGED vehicle_status
-                                ELSE /\ TRUE
-                                     /\ UNCHANGED vehicle_status
-                          /\ pc' = [pc EXCEPT !["sub_emergency_stop_operator"] = "OperateEmergencyStop_s"]
-                          /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
-                                          e_faults, faults, 
-                                          faults_and_no_faults, fault_queue, 
-                                          no_fault, self_faults, 
-                                          external_faults, EmergencyHandlers, 
-                                          emergency_handler_status, 
-                                          SelfMonitorings, ExternalMonitorings, 
-                                          self_monitoring_results, 
-                                          external_monitoring_results, 
-                                          emergency_stop_operator_request, 
-                                          comfortable_stop_operator_request, 
-                                          EmergencyStopServices, 
-                                          EmergencyStopOperators, 
-                                          ComfortableStopServices, 
-                                          ComfortableStopOperators, 
-                                          emergency_stop_operator_status, 
-                                          comfortable_stop_operator_status, 
-                                          no_error, main_self_error_status, 
-                                          sub_self_error_status, 
-                                          supervisor_self_error_status, 
-                                          main_external_error_status, 
-                                          sub_external_error_status, 
-                                          supervisor_external_error_status, 
-                                          voter_state, mrm_operation, 
-                                          initial_selected_ecu, extra_ecu, 
-                                          switch, is_stop_operator_succeeded, 
-                                          self_recoverable_flag, 
-                                          no_operation_during_emergency, fault, 
-                                          ecu_, ecu_s, ecu_su, ecu_m, ecu_sub, 
-                                          ecu_sup, is_emergency_, 
-                                          current_mrm_behavior_, mrm_state_, 
-                                          mrm_behavior_, ecu_ma, is_emergency, 
-                                          current_mrm_behavior, mrm_state, 
-                                          mrm_behavior, ecu_sub_, ecu_mai, 
-                                          ecu_sub_e, ecu_supe, ecu_main, 
-                                          ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                          ecu_super, ecu_main_c, ecu, 
-                                          self_monitoring_count, 
-                                          main_self_monitoring_int, 
-                                          sub_self_monitoring_int, 
-                                          supervisor_self_monitoring_int, 
-                                          external_monitoring_count, 
-                                          main_external_monitoring_int, 
-                                          sub_external_monitoring_int, 
-                                          supervisor_external_monitoring_int, 
-                                          current_mrm_ecu >>
-
-sub_emergency_stop_operator == OperateEmergencyStop_s
-
-OperateEmergencyStop == /\ pc["supervisor_emergency_stop_operator"] = "OperateEmergencyStop"
-                        /\ IF switch.state = ecu_super
+OperateEmergencyStop == /\ pc["emergency_stop_operator"] = "OperateEmergencyStop"
+                        /\ IF switch.state \in {"main", "sub", "supervisor"}
                               THEN /\ IF vehicle_status /= "emergency_stopped" /\ vehicle_status /= "comfortable_stopped"
-                                         THEN /\ IF emergency_stop_operator_status[ecu_super] = "operating"
+                                         THEN /\ IF emergency_stop_operator_status[switch.state] = "operating"
                                                     THEN /\ vehicle_status' = "emergency_operating"
                                                     ELSE /\ vehicle_status' = "running"
                                          ELSE /\ TRUE
                                               /\ UNCHANGED vehicle_status
                               ELSE /\ TRUE
                                    /\ UNCHANGED vehicle_status
-                        /\ pc' = [pc EXCEPT !["supervisor_emergency_stop_operator"] = "OperateEmergencyStop"]
+                        /\ pc' = [pc EXCEPT !["emergency_stop_operator"] = "OperateEmergencyStop"]
                         /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
                                         e_faults, faults, faults_and_no_faults, 
                                         fault_queue, no_fault, self_faults, 
@@ -2177,7 +1891,6 @@ OperateEmergencyStop == /\ pc["supervisor_emergency_stop_operator"] = "OperateEm
                                         EmergencyStopServices, 
                                         EmergencyStopOperators, 
                                         ComfortableStopServices, 
-                                        ComfortableStopOperators, 
                                         emergency_stop_operator_status, 
                                         comfortable_stop_operator_status, 
                                         no_error, main_self_error_status, 
@@ -2197,9 +1910,7 @@ OperateEmergencyStop == /\ pc["supervisor_emergency_stop_operator"] = "OperateEm
                                         mrm_behavior_, ecu_ma, is_emergency, 
                                         current_mrm_behavior, mrm_state, 
                                         mrm_behavior, ecu_sub_, ecu_mai, 
-                                        ecu_sub_e, ecu_supe, ecu_main, 
-                                        ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                        ecu_super, ecu_main_c, ecu, 
+                                        ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                         self_monitoring_count, 
                                         main_self_monitoring_int, 
                                         sub_self_monitoring_int, 
@@ -2210,83 +1921,13 @@ OperateEmergencyStop == /\ pc["supervisor_emergency_stop_operator"] = "OperateEm
                                         supervisor_external_monitoring_int, 
                                         current_mrm_ecu >>
 
-supervisor_emergency_stop_operator == OperateEmergencyStop
+emergency_stop_operator == OperateEmergencyStop
 
-OperatecomfortableStop_ == /\ pc["main_comfortable_stop_operator"] = "OperatecomfortableStop_"
-                           /\ IF switch.state = ecu_main_c
-                                 THEN /\ IF vehicle_status /= "comfortable_stopped"
-                                            THEN /\ IF comfortable_stop_operator_status[ecu_main_c] = "operating"
-                                                       THEN /\ IF emergency_stop_operator_status[ecu_main_c] = "operating"
-                                                                  THEN /\ no_operation_during_emergency' = FALSE
-                                                                  ELSE /\ TRUE
-                                                                       /\ UNCHANGED no_operation_during_emergency
-                                                            /\ vehicle_status' = "comfortable_operating"
-                                                       ELSE /\ IF vehicle_status /= "emergency_stopped"
-                                                                  THEN /\ vehicle_status' = "running"
-                                                                  ELSE /\ TRUE
-                                                                       /\ UNCHANGED vehicle_status
-                                                            /\ UNCHANGED no_operation_during_emergency
-                                            ELSE /\ TRUE
-                                                 /\ UNCHANGED << vehicle_status, 
-                                                                 no_operation_during_emergency >>
-                                 ELSE /\ TRUE
-                                      /\ UNCHANGED << vehicle_status, 
-                                                      no_operation_during_emergency >>
-                           /\ pc' = [pc EXCEPT !["main_comfortable_stop_operator"] = "OperatecomfortableStop_"]
-                           /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
-                                           e_faults, faults, 
-                                           faults_and_no_faults, fault_queue, 
-                                           no_fault, self_faults, 
-                                           external_faults, EmergencyHandlers, 
-                                           emergency_handler_status, 
-                                           SelfMonitorings, 
-                                           ExternalMonitorings, 
-                                           self_monitoring_results, 
-                                           external_monitoring_results, 
-                                           emergency_stop_operator_request, 
-                                           comfortable_stop_operator_request, 
-                                           EmergencyStopServices, 
-                                           EmergencyStopOperators, 
-                                           ComfortableStopServices, 
-                                           ComfortableStopOperators, 
-                                           emergency_stop_operator_status, 
-                                           comfortable_stop_operator_status, 
-                                           no_error, main_self_error_status, 
-                                           sub_self_error_status, 
-                                           supervisor_self_error_status, 
-                                           main_external_error_status, 
-                                           sub_external_error_status, 
-                                           supervisor_external_error_status, 
-                                           voter_state, mrm_operation, 
-                                           initial_selected_ecu, extra_ecu, 
-                                           switch, is_stop_operator_succeeded, 
-                                           self_recoverable_flag, fault, ecu_, 
-                                           ecu_s, ecu_su, ecu_m, ecu_sub, 
-                                           ecu_sup, is_emergency_, 
-                                           current_mrm_behavior_, mrm_state_, 
-                                           mrm_behavior_, ecu_ma, is_emergency, 
-                                           current_mrm_behavior, mrm_state, 
-                                           mrm_behavior, ecu_sub_, ecu_mai, 
-                                           ecu_sub_e, ecu_supe, ecu_main, 
-                                           ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                           ecu_super, ecu_main_c, ecu, 
-                                           self_monitoring_count, 
-                                           main_self_monitoring_int, 
-                                           sub_self_monitoring_int, 
-                                           supervisor_self_monitoring_int, 
-                                           external_monitoring_count, 
-                                           main_external_monitoring_int, 
-                                           sub_external_monitoring_int, 
-                                           supervisor_external_monitoring_int, 
-                                           current_mrm_ecu >>
-
-main_comfortable_stop_operator == OperatecomfortableStop_
-
-OperatecomfortableStop == /\ pc["sub_comfortable_stop_operator"] = "OperatecomfortableStop"
-                          /\ IF switch.state = ecu
+OperateComfortableStop == /\ pc["comfortable_stop_operator"] = "OperateComfortableStop"
+                          /\ IF switch.state \in {"main", "sub"}
                                 THEN /\ IF vehicle_status /= "comfortable_stopped"
-                                           THEN /\ IF comfortable_stop_operator_status[ecu] = "operating"
-                                                      THEN /\ IF emergency_stop_operator_status[ecu] = "operating"
+                                           THEN /\ IF comfortable_stop_operator_status[switch.state] = "operating"
+                                                      THEN /\ IF emergency_stop_operator_status[switch.state] = "operating"
                                                                  THEN /\ no_operation_during_emergency' = FALSE
                                                                  ELSE /\ TRUE
                                                                       /\ UNCHANGED no_operation_during_emergency
@@ -2302,7 +1943,7 @@ OperatecomfortableStop == /\ pc["sub_comfortable_stop_operator"] = "Operatecomfo
                                 ELSE /\ TRUE
                                      /\ UNCHANGED << vehicle_status, 
                                                      no_operation_during_emergency >>
-                          /\ pc' = [pc EXCEPT !["sub_comfortable_stop_operator"] = "OperatecomfortableStop"]
+                          /\ pc' = [pc EXCEPT !["comfortable_stop_operator"] = "OperateComfortableStop"]
                           /\ UNCHANGED << fault_ecu, s_faults, no_faults, 
                                           e_faults, faults, 
                                           faults_and_no_faults, fault_queue, 
@@ -2317,7 +1958,6 @@ OperatecomfortableStop == /\ pc["sub_comfortable_stop_operator"] = "Operatecomfo
                                           EmergencyStopServices, 
                                           EmergencyStopOperators, 
                                           ComfortableStopServices, 
-                                          ComfortableStopOperators, 
                                           emergency_stop_operator_status, 
                                           comfortable_stop_operator_status, 
                                           no_error, main_self_error_status, 
@@ -2336,9 +1976,7 @@ OperatecomfortableStop == /\ pc["sub_comfortable_stop_operator"] = "Operatecomfo
                                           mrm_behavior_, ecu_ma, is_emergency, 
                                           current_mrm_behavior, mrm_state, 
                                           mrm_behavior, ecu_sub_, ecu_mai, 
-                                          ecu_sub_e, ecu_supe, ecu_main, 
-                                          ecu_sub_c, ecu_main_, ecu_sub_em, 
-                                          ecu_super, ecu_main_c, ecu, 
+                                          ecu_sub_e, ecu_supe, ecu_main, ecu, 
                                           self_monitoring_count, 
                                           main_self_monitoring_int, 
                                           sub_self_monitoring_int, 
@@ -2349,7 +1987,7 @@ OperatecomfortableStop == /\ pc["sub_comfortable_stop_operator"] = "Operatecomfo
                                           supervisor_external_monitoring_int, 
                                           current_mrm_ecu >>
 
-sub_comfortable_stop_operator == OperatecomfortableStop
+comfortable_stop_operator == OperateComfortableStop
 
 Voter == /\ pc["voter"] = "Voter"
          /\ IF voter_state.state /= "succeeded"
@@ -2657,7 +2295,6 @@ Voter == /\ pc["voter"] = "Voter"
                          ExternalMonitorings, self_monitoring_results, 
                          external_monitoring_results, EmergencyStopServices, 
                          EmergencyStopOperators, ComfortableStopServices, 
-                         ComfortableStopOperators, 
                          emergency_stop_operator_status, 
                          comfortable_stop_operator_status, no_error, 
                          vehicle_status, initial_selected_ecu, extra_ecu, 
@@ -2667,8 +2304,7 @@ Voter == /\ pc["voter"] = "Voter"
                          current_mrm_behavior_, mrm_state_, mrm_behavior_, 
                          ecu_ma, is_emergency, current_mrm_behavior, mrm_state, 
                          mrm_behavior, ecu_sub_, ecu_mai, ecu_sub_e, ecu_supe, 
-                         ecu_main, ecu_sub_c, ecu_main_, ecu_sub_em, ecu_super, 
-                         ecu_main_c, ecu >>
+                         ecu_main, ecu >>
 
 voter == Voter
 
@@ -2689,7 +2325,7 @@ Vehicle == /\ pc["vehicle"] = "Vehicle"
                            emergency_stop_operator_request, 
                            comfortable_stop_operator_request, 
                            EmergencyStopServices, EmergencyStopOperators, 
-                           ComfortableStopServices, ComfortableStopOperators, 
+                           ComfortableStopServices, 
                            emergency_stop_operator_status, 
                            comfortable_stop_operator_status, no_error, 
                            main_self_error_status, sub_self_error_status, 
@@ -2705,8 +2341,7 @@ Vehicle == /\ pc["vehicle"] = "Vehicle"
                            current_mrm_behavior_, mrm_state_, mrm_behavior_, 
                            ecu_ma, is_emergency, current_mrm_behavior, 
                            mrm_state, mrm_behavior, ecu_sub_, ecu_mai, 
-                           ecu_sub_e, ecu_supe, ecu_main, ecu_sub_c, ecu_main_, 
-                           ecu_sub_em, ecu_super, ecu_main_c, ecu, 
+                           ecu_sub_e, ecu_supe, ecu_main, ecu, 
                            self_monitoring_count, main_self_monitoring_int, 
                            sub_self_monitoring_int, 
                            supervisor_self_monitoring_int, 
@@ -2723,10 +2358,8 @@ Next == safety_mechanism \/ main_self_monitoring \/ sub_self_monitoring
            \/ main_emergency_handler \/ sub_emergency_handler
            \/ main_emergency_stop_service \/ sub_emergency_stop_service
            \/ supervisor_emergency_stop_service \/ main_comfortable_stop_service
-           \/ sub_comfortable_stop_service \/ main_emergency_stop_operator
-           \/ sub_emergency_stop_operator \/ supervisor_emergency_stop_operator
-           \/ main_comfortable_stop_operator \/ sub_comfortable_stop_operator
-           \/ voter \/ vehicle
+           \/ sub_comfortable_stop_service \/ emergency_stop_operator
+           \/ comfortable_stop_operator \/ voter \/ vehicle
 
 Spec == /\ Init /\ [][Next]_vars
         /\ WF_vars(Next)
@@ -2744,11 +2377,8 @@ Spec == /\ Init /\ [][Next]_vars
         /\ WF_vars(supervisor_emergency_stop_service)
         /\ WF_vars(main_comfortable_stop_service)
         /\ WF_vars(sub_comfortable_stop_service)
-        /\ WF_vars(main_emergency_stop_operator)
-        /\ WF_vars(sub_emergency_stop_operator)
-        /\ WF_vars(supervisor_emergency_stop_operator)
-        /\ WF_vars(main_comfortable_stop_operator)
-        /\ WF_vars(sub_comfortable_stop_operator)
+        /\ WF_vars(emergency_stop_operator)
+        /\ WF_vars(comfortable_stop_operator)
         /\ WF_vars(voter)
         /\ SF_vars(vehicle)
 
